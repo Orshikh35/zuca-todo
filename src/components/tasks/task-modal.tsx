@@ -2,7 +2,7 @@
 
 import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Button, Modal } from "@/components/ui";
+import { Button, Modal, Select } from "@/components/ui";
 import { PRIORITIES, STATUSES } from "@/lib/constants";
 import { useStore } from "@/lib/data/store";
 import type { Task, TaskPriority, TaskStatus } from "@/lib/types";
@@ -162,18 +162,18 @@ export function TaskModal({
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="label">Гүйцэтгэх хэлтэс</label>
-            <select className="field" value={f.department_id} onChange={(e) => set("department_id", e.target.value)}>
+            <Select className="field" value={f.department_id} onChange={(e) => set("department_id", e.target.value)}>
               <option value="">— Хэлтэсгүй —</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="label">Хариуцагч</label>
-            <select
+            <Select
               className="field"
               value={f.assignee_id}
               onChange={(e) => {
@@ -205,21 +205,21 @@ export function TaskModal({
                   </optgroup>
                 );
               })}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="label">Төлөв</label>
-            <select className="field" value={f.status} onChange={(e) => set("status", e.target.value as TaskStatus)}>
+            <Select className="field" value={f.status} onChange={(e) => set("status", e.target.value as TaskStatus)}>
               {STATUSES.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="label">Хүсэлт гаргасан хэлтэс</label>
-            <select className="field" value={f.from_department_id} onChange={(e) => set("from_department_id", e.target.value)}>
+            <Select className="field" value={f.from_department_id} onChange={(e) => set("from_department_id", e.target.value)}>
               <option value="">— Дотоод ажил —</option>
               {departments
                 .filter((d) => d.id !== f.department_id)
@@ -228,7 +228,7 @@ export function TaskModal({
                     {d.name}
                   </option>
                 ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="label">Дуусах хугацаа</label>
@@ -240,14 +240,14 @@ export function TaskModal({
           </div>
           <div className="sm:col-span-2">
             <label className="label">Холбоотой зуслан</label>
-            <select className="field" value={f.camp_id} onChange={(e) => set("camp_id", e.target.value)}>
+            <Select className="field" value={f.camp_id} onChange={(e) => set("camp_id", e.target.value)}>
               <option value="">— Байхгүй —</option>
               {sortedCamps.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
         <div>

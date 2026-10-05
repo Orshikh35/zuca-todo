@@ -8,6 +8,19 @@ const RANK: Record<Role, number> = { admin: 3, director: 2, manager: 1, member: 
 
 export const atLeast = (me: Profile | null | undefined, role: Role) => !!me && RANK[me.role] >= RANK[role];
 
+/**
+ * ZUCA-д хоёр эрх: Админ (бүх ажилтны ажил, явцыг харна) ба Ажилтан.
+ * Ажилтан зөвхөн өөрт оноогдсон, өөрийн үүсгэсэн болон эзэнгүй ажлыг харна.
+ * (director — хуучин «Удирдлага», админтай адил тооцно)
+ */
+export const isAdmin = (me: Profile | null | undefined) => !!me && (me.role === "admin" || me.role === "director");
+
+export function canSeeTask(me: Profile | null | undefined, t: Pick<Task, "assignee_id" | "created_by">) {
+  if (isAdmin(me)) return true;
+  if (!t.assignee_id) return true;
+  return !!me && (t.assignee_id === me.id || t.created_by === me.id);
+}
+
 /** Байгууллагын бүтэц (хэлтэс, эрх) засах */
 export const canManageOrg = (me: Profile | null | undefined) => atLeast(me, "director");
 
@@ -15,7 +28,7 @@ export const canManageOrg = (me: Profile | null | undefined) => atLeast(me, "dir
 export function canSetRole(me: Profile | null | undefined, target: Role) {
   if (!me) return false;
   if (me.role === "admin") return true;
-  return me.role === "director" && RANK[target] < RANK.director;
+  return me.role === "director" && target === "member";
 }
 
 /** Тухайн хэлтсийг удирдах эрхтэй эсэх (дарга нь эсвэл удирдлага) */

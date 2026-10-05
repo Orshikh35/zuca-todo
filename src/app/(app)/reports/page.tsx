@@ -2,7 +2,8 @@
 
 import { Download, Printer } from "lucide-react";
 import { useMemo, useState } from "react";
-import { BarList, ColumnChart, SERIES } from "@/components/charts";
+import { Donut, Hero, HeroChip, PillBars, Tile } from "@/components/bento";
+import { BarList, SERIES } from "@/components/charts";
 import { Avatar, Button, Card, PageHeader, Segmented } from "@/components/ui";
 import { FIELD_CHECKS, completeness } from "@/lib/completeness";
 import { download } from "@/lib/csv";
@@ -10,7 +11,7 @@ import { OWNERSHIPS, PRIORITIES, STAGES, STATUSES } from "@/lib/constants";
 import { useStore } from "@/lib/data/store";
 import { inRange, periodStats, taskBuckets } from "@/lib/report";
 import { taskDeptId } from "@/lib/permissions";
-import { addDays, cn, isOverdue, toISODate, todayISO } from "@/lib/utils";
+import { cn, isOverdue, toISODate, todayISO } from "@/lib/utils";
 
 type Range = "7" | "30" | "90";
 
@@ -19,7 +20,7 @@ const STAGE_RAMP = ["#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281"];
 const PRIORITY_HEX: Record<string, string> = { urgent: "#d03b3b", high: "#ec835a", medium: "#2a78d6", low: "#a1a1aa" };
 
 export default function ReportsPage() {
-  const { tasks, camps, profiles, campById, departments, dailyReports, approvals, profileById } = useStore();
+  const { tasks, camps, profiles, campById, departments, profileById } = useStore();
   const [range, setRange] = useState<Range>("30");
   const days = Number(range);
 
@@ -46,9 +47,6 @@ export default function ReportsPage() {
 
   // Хэлтэс бүрийн гүйцэтгэл
   const deptRows = useMemo(() => {
-    const workdays = Array.from({ length: days }, (_, i) => addDays(new Date(), -i))
-      .filter((d) => d.getDay() !== 0 && d.getDay() !== 6)
-      .map(toISODate);
     return departments.map((d) => {
       const own = tasks.filter((t) => taskDeptId(t, profileById) === d.id);
       const o = own.filter((t) => t.status !== "done");
@@ -56,9 +54,6 @@ export default function ReportsPage() {
       const withDue = done.filter((t) => t.due_date);
       const onTime = withDue.filter((t) => toISODate(new Date(t.completed_at!)) <= t.due_date!).length;
       const members = profiles.filter((p) => p.active && p.department_id === d.id);
-      const expected = members.length * workdays.length;
-      const submitted = dailyReports.filter((r) => members.some((m) => m.id === r.profile_id) && workdays.includes(r.date)).length;
-      const appr = approvals.filter((a) => a.department_id === d.id && inRange(a.created_at, stats.from));
       return {
         d,
         members: members.length,
@@ -67,12 +62,9 @@ export default function ReportsPage() {
         done: done.length,
         onTimePct: withDue.length ? Math.round((onTime / withDue.length) * 100) : null,
         incoming: own.filter((t) => t.from_department_id && inRange(t.created_at, stats.from)).length,
-        reportPct: expected ? Math.round((Math.min(submitted, expected) / expected) * 100) : null,
-        approvals: appr.length,
-        approved: appr.filter((a) => a.status === "approved").length,
       };
     });
-  }, [departments, tasks, profiles, dailyReports, approvals, profileById, stats.from, days]);
+  }, [departments, tasks, profiles, profileById, stats.from]);
 
   const scored = camps.map((c) => ({ c, ...completeness(c) }));
   const activeish = scored.filter((x) => x.c.stage !== "inactive");
@@ -156,70 +148,102 @@ export default function ReportsPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric
-          label="Дууссан ажил"
-          value={stats.doneCount}
-          foot={
-            stats.prevDone || stats.doneCount ? (
-              <span className={delta >= 0 ? "text-emerald-700" : "text-red-600"}>
-                {delta >= 0 ? "▲" : "▼"} {Math.abs(delta)} өмнөх үетэй харьцуулахад
-              </span>
-            ) : null
+      {/* Bento товчоо */}
+      <div className="flex flex-wrap gap-4">
+        <Hero
+          tone="lime"
+          className="min-w-0 flex-[2_1_340px]"
+          title="Дууссан ажил"
+          value={`+${stats.doneCount}`}
+          unit={`сүүлийн ${days} хоногт`}
+          chips={
+            <>
+              {(stats.prevDone > 0 || stats.doneCount > 0) && (
+                <HeroChip>
+                  {delta >= 0 ? "▲" : "▼"} {Math.abs(delta)} өмнөх үеэс
+                </HeroChip>
+              )}
+              <HeroChip>🆕 Шинэ {stats.created}</HeroChip>
+              <HeroChip>📂 Нээлттэй {open.length}</HeroChip>
+            </>
           }
         />
-        <Metric label="Шинээр үүссэн" value={stats.created} foot={`${open.length} нээлттэй байна`} />
-        <Metric
-          label="Дундаж гүйцэтгэх хугацаа"
-          value={stats.avgCycle == null ? "—" : stats.avgCycle.toFixed(1)}
-          unit="хоног"
-          foot="Үүссэнээс дуусах хүртэл"
+        <Tile
+          className="flex-[1_1_190px]"
+          tint="violet"
+          title="Дундаж хугацаа"
+          value={
+            <>
+              {stats.avgCycle == null ? "—" : stats.avgCycle.toFixed(1)}
+              <span className="ml-1 text-base font-medium text-zinc-400">хоног</span>
+            </>
+          }
+          caption="Үүссэнээс дуусах хүртэл"
         />
-        <Metric
-          label="Хугацаандаа дууссан"
-          value={stats.onTimePct == null ? "—" : stats.onTimePct}
-          unit={stats.onTimePct == null ? "" : "%"}
-          foot="Хугацаатай ажлуудаас"
+        <Tile
+          className="flex-[1_1_190px]"
+          tint="emerald"
+          title="Хугацаандаа"
+          value={stats.onTimePct == null ? "—" : `${stats.onTimePct}%`}
+          caption="Хугацаатай ажлуудаас"
+          chip={stats.onTimePct == null ? null : stats.onTimePct >= 80 ? { text: "Сайн", tone: "good" } : stats.onTimePct >= 50 ? { text: "Дунд", tone: "warn" } : { text: "Сул", tone: "bad" }}
         />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-        <Panel title="Ажлын урсгал" sub={days <= 14 ? "Өдөр бүрээр" : "7 хоног бүрээр"}>
-          <ColumnChart
-            buckets={buckets}
-            series={[
-              { name: "Шинээр үүссэн", color: SERIES[0] },
-              { name: "Дууссан", color: SERIES[1] },
-            ]}
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+        <Panel title="Ажлын урсгал" sub={`${days <= 14 ? "Өдөр бүрээр" : "7 хоног бүрээр"} дууссан ажил`}>
+          <PillBars
+            data={buckets.map((b, i) => ({
+              label: b.label,
+              value: b.values[1],
+              hint: `${b.full}: ${b.values[1]} дууссан, ${b.values[0]} шинэ`,
+              active: i === buckets.length - 1,
+            }))}
+            format={(v) => `+${v}`}
           />
         </Panel>
-        <Panel title="Нээлттэй ажил — яаралтай байдлаар">
-          <BarList
-            rows={PRIORITIES.map((p) => ({
-              label: p.label,
-              value: open.filter((t) => t.priority === p.id).length,
-              color: PRIORITY_HEX[p.id],
-            }))}
-          />
-          <div className="mt-5 border-t border-zinc-100 pt-4">
-            <div className="mb-2 text-xs font-medium text-zinc-500">Төлөвөөр</div>
-            <div className="grid grid-cols-4 gap-2 text-center">
-              {STATUSES.map((s) => (
-                <div key={s.id} className="rounded-lg bg-zinc-50 py-2">
-                  <div className="tabular text-lg font-semibold">{tasks.filter((t) => t.status === s.id).length}</div>
-                  <div className="text-[11px] text-zinc-500">{s.label}</div>
-                </div>
-              ))}
+        <Panel title="Нээлттэй ажлын бүтэц">
+          <div className="flex flex-col items-center gap-6 sm:flex-row">
+            <Donut
+              parts={PRIORITIES.map((p) => ({ label: p.label, value: open.filter((t) => t.priority === p.id).length, color: PRIORITY_HEX[p.id] }))}
+              center={
+                <>
+                  <span className="text-xs text-zinc-500">Нийт</span>
+                  <span className="tabular text-3xl font-semibold">{open.length}</span>
+                </>
+              }
+            />
+            <div className="grid flex-1 grid-cols-2 gap-x-4 gap-y-3">
+              {PRIORITIES.map((p) => {
+                const n = open.filter((t) => t.priority === p.id).length;
+                return (
+                  <div key={p.id}>
+                    <div className="text-xs text-zinc-500">{p.label}</div>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-lg font-semibold">
+                      <span className="h-4 w-1 rounded-full" style={{ background: PRIORITY_HEX[p.id] }} />
+                      {n}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+          </div>
+          <div className="mt-5 grid grid-cols-4 gap-2 text-center">
+            {STATUSES.map((s) => (
+              <div key={s.id} className="rounded-2xl bg-zinc-100 py-2">
+                <div className="tabular text-lg font-semibold">{tasks.filter((t) => t.status === s.id).length}</div>
+                <div className="text-[11px] text-zinc-500">{s.label}</div>
+              </div>
+            ))}
           </div>
         </Panel>
       </div>
 
       {deptRows.length > 0 && (
-        <Panel title="Хэлтсүүд" sub={`Сүүлийн ${days} хоног · тайлан = ажлын өдрүүдэд өдрийн тайлан өгсөн хувь`} className="mt-6" flush>
+        <Panel title="Хэлтсүүд" sub={`Сүүлийн ${days} хоног`} className="mt-4" flush>
           <div className="scroll-thin overflow-x-auto">
-            <table className="w-full min-w-[820px] text-sm">
-              <thead className="border-y border-zinc-100 bg-zinc-50/70 text-xs text-zinc-500">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="border-y border-zinc-100 text-xs text-zinc-500">
                 <tr>
                   <th className="py-2.5 pl-5 text-left font-medium">Хэлтэс</th>
                   <th className="px-3 text-right font-medium">Хүн</th>
@@ -227,9 +251,7 @@ export default function ReportsPage() {
                   <th className="px-3 text-right font-medium">Хэтэрсэн</th>
                   <th className="px-3 text-right font-medium">Дууссан</th>
                   <th className="px-3 text-right font-medium">Хугацаандаа</th>
-                  <th className="px-3 text-right font-medium">Ирсэн хүсэлт</th>
-                  <th className="px-3 text-right font-medium">Тайлан</th>
-                  <th className="px-5 text-right font-medium">Батлалт</th>
+                  <th className="px-5 text-right font-medium">Ирсэн хүсэлт</th>
                 </tr>
               </thead>
               <tbody className="tabular divide-y divide-zinc-100">
@@ -248,11 +270,7 @@ export default function ReportsPage() {
                     <td className={cn("px-3 text-right", r.onTimePct == null ? "text-zinc-300" : r.onTimePct >= 80 ? "text-emerald-700" : r.onTimePct >= 50 ? "text-amber-700" : "text-red-600")}>
                       {r.onTimePct == null ? "—" : `${r.onTimePct}%`}
                     </td>
-                    <td className="px-3 text-right text-zinc-600">{r.incoming || <span className="text-zinc-300">0</span>}</td>
-                    <td className={cn("px-3 text-right", r.reportPct == null ? "text-zinc-300" : r.reportPct >= 80 ? "text-emerald-700" : r.reportPct >= 50 ? "text-amber-700" : "text-red-600")}>
-                      {r.reportPct == null ? "—" : `${r.reportPct}%`}
-                    </td>
-                    <td className="px-5 text-right text-zinc-600">{r.approvals ? `${r.approved}/${r.approvals}` : <span className="text-zinc-300">—</span>}</td>
+                    <td className="px-5 text-right text-zinc-600">{r.incoming || <span className="text-zinc-300">0</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -261,10 +279,10 @@ export default function ReportsPage() {
         </Panel>
       )}
 
-      <Panel title="Багийн гишүүд" sub={`Дууссан = сүүлийн ${days} хоногт`} className="mt-6" flush>
+      <Panel title="Багийн гишүүд" sub={`Дууссан = сүүлийн ${days} хоногт`} className="mt-4" flush>
         <div className="scroll-thin overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
-            <thead className="border-y border-zinc-100 bg-zinc-50/70 text-xs text-zinc-500">
+            <thead className="border-y border-zinc-100 text-xs text-zinc-500">
               <tr>
                 <th className="py-2.5 pl-5 text-left font-medium">Гишүүн</th>
                 <th className="px-3 text-right font-medium">Нээлттэй</th>
@@ -300,7 +318,7 @@ export default function ReportsPage() {
         </div>
       </Panel>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         <Panel title="Зуслан татах шат" sub={`${camps.length} зуслан`}>
           <BarList rows={STAGES.map((s, i) => ({ label: s.label, value: camps.filter((c) => c.stage === s.id).length, color: STAGE_RAMP[i] }))} />
         </Panel>
@@ -327,27 +345,14 @@ export default function ReportsPage() {
   );
 }
 
-function Metric({ label, value, unit, foot }: { label: string; value: number | string; unit?: string; foot?: React.ReactNode }) {
-  return (
-    <Card className="p-4">
-      <div className="text-xs font-medium text-zinc-500">{label}</div>
-      <div className="mt-1.5 text-3xl font-semibold tracking-tight">
-        {value}
-        {unit && <span className="ml-1 text-base font-medium text-zinc-400">{unit}</span>}
-      </div>
-      {foot && <div className="mt-1 text-[11px] text-zinc-400">{foot}</div>}
-    </Card>
-  );
-}
-
 function Panel({ title, sub, children, className, flush }: { title: string; sub?: string; children: React.ReactNode; className?: string; flush?: boolean }) {
   return (
     <Card className={cn("break-inside-avoid", className)}>
-      <div className="px-5 pt-4 pb-3">
-        <h2 className="text-[15px] font-semibold">{title}</h2>
+      <div className="px-5 pt-5 pb-3 sm:px-6">
+        <h2 className="text-lg font-medium tracking-tight">{title}</h2>
         {sub && <p className="mt-0.5 text-xs text-zinc-500">{sub}</p>}
       </div>
-      <div className={flush ? "pb-2" : "px-5 pb-5"}>{children}</div>
+      <div className={flush ? "pb-2" : "px-5 pb-5 sm:px-6"}>{children}</div>
     </Card>
   );
 }

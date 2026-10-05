@@ -92,7 +92,7 @@ export function DayPlan({
                       {done ? <Check size={13} strokeWidth={3} /> : i + 1}
                     </button>
                   ) : (
-                    <span className="tabular grid size-6 shrink-0 place-items-center rounded-full bg-zinc-900 text-[11px] font-semibold text-white">{i + 1}</span>
+                    <span className="tabular grid size-6 shrink-0 place-items-center rounded-full bg-neutral-900 text-[11px] font-semibold text-white dark:bg-white dark:text-neutral-900">{i + 1}</span>
                   )}
                   <button onClick={() => t && onOpenTask(t)} disabled={!t} className="min-w-0 flex-1 text-left enabled:cursor-pointer">
                     <div className="flex flex-wrap items-center gap-2">
@@ -122,7 +122,7 @@ export function DayPlan({
               const done = applied.has(i);
               return (
                 <li key={i} className="flex items-start gap-3 rounded-lg bg-zinc-50 px-3 py-2.5">
-                  <span className="mt-0.5 shrink-0 rounded bg-white px-1.5 py-px text-[10px] font-semibold text-zinc-600 ring-1 ring-zinc-200">{ACTION_LABEL[s.action]}</span>
+                  <span className="mt-0.5 shrink-0 rounded bg-surface px-1.5 py-px text-[10px] font-semibold text-zinc-600 ring-1 ring-zinc-200">{ACTION_LABEL[s.action]}</span>
                   <div className="min-w-0 flex-1 text-sm">
                     <div className="truncate font-medium">{t?.title}</div>
                     <div className="text-xs text-zinc-500">

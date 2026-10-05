@@ -2,7 +2,7 @@
 
 import { Ban, Check, ClipboardCheck, Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Avatar, Button, Card, Empty, Modal, PageHeader, Segmented } from "@/components/ui";
+import { Avatar, Button, Card, Empty, Modal, PageHeader, Segmented, Select } from "@/components/ui";
 import { APPROVAL_KINDS, APPROVAL_STATUSES } from "@/lib/constants";
 import { useStore } from "@/lib/data/store";
 import { approverFor, canDecide, canSeeApproval } from "@/lib/permissions";
@@ -290,7 +290,7 @@ function NewApproval({ onClose }: { onClose: () => void }) {
         </div>
         <div>
           <label className="label" htmlFor="a-appr">Батлах хүн</label>
-          <select id="a-appr" className="field" value={approver} onChange={(e) => setApprover(e.target.value)}>
+          <Select id="a-appr" className="field" value={approver} onChange={(e) => setApprover(e.target.value)}>
             <option value="">— Удирдлага (дурын) —</option>
             {profiles
               .filter((p) => p.active && p.id !== me?.id && p.role !== "member")
@@ -301,7 +301,7 @@ function NewApproval({ onClose }: { onClose: () => void }) {
                   {p.id === auto ? " (хэлтсийн дарга / санал болгож буй)" : ""}
                 </option>
               ))}
-          </select>
+          </Select>
         </div>
       </form>
     </Modal>

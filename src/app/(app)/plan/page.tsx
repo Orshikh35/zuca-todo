@@ -4,6 +4,7 @@ import { CalendarDays, CalendarRange, ChevronLeft, ChevronRight, ClipboardList, 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { FilterBar, Hero, HeroChip, Pill } from "@/components/bento";
 import { Board, type BoardColumn } from "@/components/board";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskModal, type TaskDraft } from "@/components/tasks/task-modal";
@@ -127,12 +128,12 @@ function PlanInner() {
         subtitle="Ажлаа жил, улирал, сараар төлөвлөж, гүйцэтгэлээ хянана"
         actions={
           <>
-            <div className="flex items-center rounded-lg bg-white ring-1 ring-zinc-200">
-              <button className="cursor-pointer rounded-l-lg p-2 hover:bg-zinc-50" onClick={() => setYear(year - 1)} aria-label="Өмнөх жил">
+            <div className="glass flex h-10 items-center rounded-full px-1">
+              <button className="grid size-8 cursor-pointer place-items-center rounded-full hover:bg-zinc-100" onClick={() => setYear(year - 1)} aria-label="Өмнөх жил">
                 <ChevronLeft size={16} />
               </button>
               <span className="tabular px-2 text-sm font-semibold">{year} он</span>
-              <button className="cursor-pointer rounded-r-lg p-2 hover:bg-zinc-50" onClick={() => setYear(year + 1)} aria-label="Дараах жил">
+              <button className="grid size-8 cursor-pointer place-items-center rounded-full hover:bg-zinc-100" onClick={() => setYear(year + 1)} aria-label="Дараах жил">
                 <ChevronRight size={16} />
               </button>
             </div>
@@ -153,21 +154,46 @@ function PlanInner() {
         }
       />
 
-      {/* Улирлын товч үзүүлэлт */}
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Card className="col-span-2 p-4 lg:col-span-1">
-          <div className="text-xs font-medium text-zinc-500">{year} оны төлөвлөгөө</div>
-          <div className="mt-1 flex items-baseline gap-1.5">
-            <span className={cn("text-3xl font-semibold tracking-tight", pctTone(yearStats.pct).text)}>{yearStats.pct ?? "—"}</span>
-            {yearStats.pct != null && <span className="text-sm text-zinc-400">%</span>}
+      {/* Улирлын товч үзүүлэлт — bento */}
+      <div className="mb-5 flex flex-wrap gap-4">
+        <Hero
+          tone="sky"
+          className="min-w-0 flex-[2_1_280px]"
+          title={`${year} оны төлөвлөгөө`}
+          value={yearStats.pct ?? "—"}
+          unit={yearStats.pct != null ? "% биелсэн" : undefined}
+          chips={
+            <>
+              <HeroChip>
+                ✅ {yearStats.done}/{yearStats.planned} дууссан
+              </HeroChip>
+              {yearStats.overdue > 0 && <HeroChip>⚠️ {yearStats.overdue} хэтэрсэн</HeroChip>}
+            </>
+          }
+        >
+          {/* 12 сарын жижиг баганууд */}
+          <div className="mt-5 flex h-16 items-end gap-1.5">
+            {yearMonths.map((k) => {
+              const st = planStats(tasksInMonths(scoped, [k]));
+              const h = st.planned ? 24 + Math.round(((st.pct ?? 0) / 100) * 40) : 14;
+              return (
+                <button
+                  key={k}
+                  title={`${monthLabel(k)}: ${st.done}/${st.planned}`}
+                  onClick={() => {
+                    setMonth(parseMonth(k).month);
+                    setView("month");
+                  }}
+                  className={cn(
+                    "flex-1 cursor-pointer rounded-full transition hover:opacity-80",
+                    k === now ? "bg-neutral-900" : st.planned ? "bg-white/70" : "bg-white/35",
+                  )}
+                  style={{ height: h }}
+                />
+              );
+            })}
           </div>
-          <div className="mt-2">
-            <Progress value={yearStats.pct ?? 0} tone={pctTone(yearStats.pct).bar} />
-          </div>
-          <div className="tabular mt-1.5 text-[11px] text-zinc-500">
-            {yearStats.done}/{yearStats.planned} ажил дууссан
-          </div>
-        </Card>
+        </Hero>
         {QUARTERS.map((q) => {
           const st = planStats(tasksInMonths(scoped, q.months.map((m) => monthKey(year, m))));
           const isNow = year === parseMonth(now).year && quarterOf(parseMonth(now).month) === q.id;
@@ -182,24 +208,29 @@ function PlanInner() {
                 setView("quarter");
               }}
               className={cn(
-                "cursor-pointer rounded-2xl border bg-white p-4 text-left shadow-card transition hover:border-zinc-300",
-                selected ? "border-brand-400 ring-4 ring-brand-100" : "border-zinc-200/70",
+                "glass relative flex cursor-pointer flex-col justify-start overflow-hidden rounded-[1.75rem] p-5 text-left transition hover:-translate-y-0.5 min-w-0 flex-[1_1_130px]",
+                selected && "ring-2 ring-neutral-900 dark:ring-white",
               )}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">{q.label}</span>
-                {isNow && <span className="rounded-full bg-brand-50 px-1.5 py-px text-[10px] font-semibold text-brand-700">Одоо</span>}
-              </div>
-              <div className="text-[11px] text-zinc-400">{q.hint}</div>
-              <div className="mt-2.5 flex items-center gap-2">
-                <div className="flex-1">
-                  <Progress value={st.pct ?? 0} tone={tone.bar} />
+              {isNow && <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-400/25 to-transparent" />}
+              <div className="relative flex flex-1 flex-col">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[15px] font-medium">{q.label}</span>
+                  {isNow && <span className="rounded-full bg-[#c9b8ff] px-2 py-0.5 text-[10px] font-semibold text-neutral-900">Одоо</span>}
                 </div>
-                <span className={cn("tabular text-xs font-semibold", tone.text)}>{st.pct == null ? "—" : `${st.pct}%`}</span>
-              </div>
-              <div className="tabular mt-1 text-[11px] text-zinc-500">
-                {st.done}/{st.planned} дууссан
-                {st.overdue > 0 && <span className="text-red-600"> · {st.overdue} хэтэрсэн</span>}
+                <div className="text-[11px] text-zinc-500">{q.hint}</div>
+                <div className="mt-auto pt-4">
+                  <div className={cn("tabular text-3xl font-semibold tracking-tight", st.pct == null ? "text-zinc-300" : tone.text)}>
+                    {st.pct == null ? "—" : `${st.pct}%`}
+                  </div>
+                  <div className="mt-2">
+                    <Progress value={st.pct ?? 0} tone={tone.bar} />
+                  </div>
+                  <div className="tabular mt-1.5 text-[11px] text-zinc-500">
+                    {st.done}/{st.planned} дууссан
+                    {st.overdue > 0 && <span className="text-red-600"> · {st.overdue} хэтэрсэн</span>}
+                  </div>
+                </div>
               </div>
             </button>
           );
@@ -207,8 +238,8 @@ function PlanInner() {
       </div>
 
       {/* Шүүлтүүр: хүн + улирал/сар сонгох */}
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        <div className="flex items-center rounded-lg bg-white px-1.5 py-1 ring-1 ring-zinc-200">
+      <FilterBar>
+        <div className="glass flex shrink-0 items-center rounded-full px-1.5 py-1">
           {profiles
             .filter((p) => p.active)
             .map((p) => (
@@ -218,13 +249,13 @@ function PlanInner() {
                 title={p.full_name}
                 className={cn(
                   "cursor-pointer rounded-full p-0.5 transition",
-                  who === p.id ? "ring-2 ring-brand-500" : who ? "opacity-40 hover:opacity-100" : "hover:scale-110",
+                  who === p.id ? "ring-2 ring-neutral-900 dark:ring-white" : who ? "opacity-40 hover:opacity-100" : "hover:scale-110",
                 )}
               >
                 <Avatar profile={p} size={24} />
               </button>
             ))}
-          <span className="px-2 text-xs text-zinc-500">{who ? "Сонгосон хүний төлөвлөгөө" : "Бүх хүн"}</span>
+          <span className="px-2 text-xs whitespace-nowrap text-zinc-500">{who ? "Сонгосон хүний төлөвлөгөө" : "Бүх хүн"}</span>
         </div>
 
         {view === "quarter" && (
@@ -235,26 +266,18 @@ function PlanInner() {
           />
         )}
         {(view === "month" || view === "report") && (
-          <div className="flex flex-wrap gap-1">
+          <>
             {MONTH_NAMES.map((name, i) => {
               const k = monthKey(year, i + 1);
               const n = tasksInMonths(scoped, [k]).length;
               return (
-                <button
-                  key={k}
-                  onClick={() => setMonth(i + 1)}
-                  className={cn(
-                    "tabular h-8 cursor-pointer rounded-lg px-2.5 text-xs font-medium ring-1 transition",
-                    month === i + 1 ? "bg-brand-600 text-white ring-brand-600" : "bg-white text-zinc-600 ring-zinc-200 hover:bg-zinc-50",
-                    k === now && month !== i + 1 && "ring-brand-300",
-                  )}
-                >
-                  {name.replace(" сар", "")}
-                  {n > 0 && <span className={cn("ml-1", month === i + 1 ? "text-white/70" : "text-zinc-400")}>{n}</span>}
-                </button>
+                <Pill key={k} active={month === i + 1} onClick={() => setMonth(i + 1)}>
+                  <span className={cn(k === now && month !== i + 1 && "font-semibold text-brand-700")}>{name.replace(" сар", "")}</span>
+                  {n > 0 && <span className={cn("tabular", month === i + 1 ? "opacity-60" : "text-zinc-400")}>{n}</span>}
+                </Pill>
               );
             })}
-          </div>
+          </>
         )}
         {view === "month" && (
           <Link
@@ -264,7 +287,7 @@ function PlanInner() {
             Ажлууд самбар дээр нээх <ExternalLink size={12} />
           </Link>
         )}
-      </div>
+      </FilterBar>
 
       {view === "report" ? (
         <PlanReport year={year} month={month} scoped={scoped} who={who} />
@@ -593,7 +616,7 @@ function QuickAdd({ onAdd }: { onAdd: (title: string) => void }) {
     return (
       <button
         onClick={() => setOn(true)}
-        className="flex w-full cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-zinc-500 transition hover:bg-white hover:text-zinc-800"
+        className="flex w-full cursor-pointer items-center gap-1.5 rounded-full px-3 py-2 text-sm text-zinc-500 transition hover:bg-surface-solid hover:text-zinc-800"
       >
         <Plus size={15} /> Нэмэх
       </button>

@@ -9,10 +9,12 @@ import { cn, initials } from "@/lib/utils";
 /* ─────────── Button ─────────── */
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 const variants: Record<Variant, string> = {
-  primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-sm shadow-brand-600/20",
-  secondary: "bg-white text-zinc-800 ring-1 ring-zinc-200 hover:bg-zinc-50 shadow-card",
+  // Лавлагаа дизайн шиг: light-д хар pill, dark-д цагаан pill
+  primary:
+    "bg-neutral-900 text-white hover:bg-neutral-700 shadow-sm dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200",
+  secondary: "glass text-zinc-800 hover:bg-surface-solid",
   ghost: "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900",
-  danger: "bg-white text-red-600 ring-1 ring-red-200 hover:bg-red-50",
+  danger: "glass text-red-600 hover:bg-red-50",
 };
 
 export function Button({
@@ -25,8 +27,8 @@ export function Button({
     <button
       {...props}
       className={cn(
-        "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg font-medium whitespace-nowrap transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
-        size === "sm" ? "h-8 px-2.5 text-xs" : "h-9 px-3.5 text-sm",
+        "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-full font-medium whitespace-nowrap transition active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50",
+        size === "sm" ? "h-8 px-3 text-xs" : "h-10 px-4.5 text-sm",
         variants[variant],
         className,
       )}
@@ -45,14 +47,16 @@ export function Segmented<T extends string>({
   options: { id: T; label: string; icon?: ReactNode }[];
 }) {
   return (
-    <div className="inline-flex rounded-lg bg-zinc-200/60 p-0.5">
+    <div className="glass inline-flex rounded-full p-1">
       {options.map((o) => (
         <button
           key={o.id}
           onClick={() => onChange(o.id)}
           className={cn(
-            "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-3 text-sm font-medium transition",
-            value === o.id ? "bg-white text-zinc-900 shadow-card" : "text-zinc-500 hover:text-zinc-800",
+            "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition",
+            value === o.id
+              ? "bg-neutral-900 text-white shadow-sm dark:bg-white dark:text-neutral-900"
+              : "text-zinc-500 hover:text-zinc-900",
           )}
         >
           {o.icon}
@@ -70,7 +74,7 @@ export function Avatar({ profile, size = 24, className }: { profile?: Profile | 
       <span
         title="Хариуцагчгүй"
         style={{ width: size, height: size }}
-        className={cn("inline-flex shrink-0 items-center justify-center rounded-full border border-dashed border-zinc-300 bg-white", className)}
+        className={cn("inline-flex shrink-0 items-center justify-center rounded-full border border-dashed border-zinc-300 bg-surface", className)}
       />
     );
   }
@@ -78,7 +82,7 @@ export function Avatar({ profile, size = 24, className }: { profile?: Profile | 
     <span
       title={profile.full_name}
       style={{ width: size, height: size, background: profile.color, fontSize: size * 0.42 }}
-      className={cn("inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white ring-2 ring-white", className)}
+      className={cn("inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white ring-2 ring-surface-solid", className)}
     >
       {initials(profile.full_name)}
     </span>
@@ -89,7 +93,7 @@ export function Avatar({ profile, size = 24, className }: { profile?: Profile | 
 export function PriorityChip({ priority, compact }: { priority: TaskPriority; compact?: boolean }) {
   const p = PRIORITIES.find((x) => x.id === priority)!;
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ring-1 ring-inset", p.chip)}>
+    <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ring-0", p.chip)}>
       <span className={cn("size-1.5 rounded-full", p.dot)} />
       {compact ? p.short : p.label}
     </span>
@@ -116,16 +120,20 @@ export function Modal({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-[8vh]">
-      <div className="animate-in fixed inset-0 bg-zinc-950/30 backdrop-blur-[2px]" onClick={onClose} />
-      <div role="dialog" aria-modal className={cn("animate-pop relative w-full rounded-2xl bg-white shadow-lift", width)}>
-        <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-3.5">
+      <div className="animate-in fixed inset-0 bg-black/35 backdrop-blur-[3px]" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal
+        className={cn("animate-pop relative w-full rounded-[1.75rem] border border-line bg-surface-solid shadow-lift", width)}
+      >
+        <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
           <h2 className="text-[15px] font-semibold">{title}</h2>
           <button onClick={onClose} className="cursor-pointer rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700" aria-label="Хаах">
             <X size={18} />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
-        {footer && <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-5 py-3">{footer}</div>}
+        <div className="px-6 py-5">{children}</div>
+        {footer && <div className="flex items-center justify-end gap-2 border-t border-zinc-100 px-6 py-3.5">{footer}</div>}
       </div>
     </div>
   );
@@ -151,8 +159,8 @@ export function Drawer({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">
-      <div className="animate-in absolute inset-0 bg-zinc-950/25" onClick={onClose} />
-      <aside className="animate-slide absolute top-0 right-0 flex h-full w-full max-w-xl flex-col bg-white shadow-lift">
+      <div className="animate-in absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
+      <aside className="animate-slide absolute top-2 right-2 bottom-2 flex w-[calc(100%-1rem)] max-w-xl flex-col overflow-hidden rounded-[1.75rem] border border-line bg-surface-solid shadow-lift">
         <div className="flex items-start justify-between gap-4 border-b border-zinc-100 px-6 py-4">
           <div className="min-w-0">
             <h2 className="truncate text-lg font-semibold">{title}</h2>
@@ -180,14 +188,14 @@ function useEscape(active: boolean, fn: () => void) {
 
 /* ─────────── Misc ─────────── */
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn("min-w-0 rounded-2xl border border-zinc-200/70 bg-white shadow-card", className)}>{children}</div>;
+  return <div className={cn("glass min-w-0 rounded-[1.75rem]", className)}>{children}</div>;
 }
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-[2.5rem] sm:leading-[1.1]">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -212,3 +220,4 @@ export function Progress({ value, tone }: { value: number; tone: string }) {
     </div>
   );
 }
+export { Select } from "./select";

@@ -10,6 +10,7 @@ import { z } from "zod";
 import { prettyDate, shiftDate } from "../agent/digest";
 import type { Camp, Department, MessageAuthorKind, Profile, Task, TaskPriority, TaskProposal } from "../types";
 import { AI_MODEL, AgentError, aiConfigured, anthropic } from "./ai";
+import { notifyAssignee } from "./task-notify";
 
 export type CampLite = Pick<Camp, "id" | "name" | "aimag" | "stage" | "owner_id">;
 
@@ -268,6 +269,8 @@ export async function runAgent(r: AgentRequest): Promise<AgentResult> {
             .single();
           if (error) throw new Error(error.message);
           created.push(data as Task);
+          // Хариуцагчид Telegram-аар шууд мэдэгдэнэ
+          await notifyAssignee(sb, data as Task, { actorId: r.from.profile?.id ?? null, actorName: r.from.name, reason: "created" });
           if (assignee) r.load.set(assignee, (r.load.get(assignee) ?? 0) + 1);
           return `Үүсгэлээ: id ${data.id}`;
         }),
@@ -305,6 +308,9 @@ export async function runAgent(r: AgentRequest): Promise<AgentResult> {
         const { data, error } = await sb.from("tasks").update(patch).eq("id", t.id).select().single();
         if (error) throw new Error(error.message);
         updated.push(data as Task);
+        if (patch.assignee_id && patch.assignee_id !== t.assignee_id) {
+          await notifyAssignee(sb, data as Task, { actorId: r.from.profile?.id ?? null, actorName: r.from.name, reason: "assigned" });
+        }
         return "Шинэчиллээ.";
       }),
   });

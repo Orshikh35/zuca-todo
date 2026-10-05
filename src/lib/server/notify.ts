@@ -33,3 +33,16 @@ export async function sendTelegram(chatId: string, text: string, extra: Record<s
   const json = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
   if (!res.ok || !json.ok) throw new Error(`Telegram: ${json.description ?? res.statusText}`);
 }
+
+/** Telegram Bot API-ийн дурын method (answerCallbackQuery, editMessageReplyMarkup гэх мэт) */
+export async function telegramApi(method: string, body: Record<string, unknown>) {
+  if (!telegramConfigured()) throw new Error("TELEGRAM_BOT_TOKEN тохируулаагүй");
+  const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+  if (!res.ok || !json.ok) throw new Error(`Telegram ${method}: ${json.description ?? res.statusText}`);
+  return json;
+}

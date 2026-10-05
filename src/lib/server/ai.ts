@@ -14,10 +14,10 @@ export const anthropic = () => (client ??= new Anthropic());
 const SYSTEM = `Та бол Монгол байгууллагын дотоод удирдлагын системийн AI туслах. Ажилтны нээлттэй ажлуудыг хараад өнөөдрийн ажлын өдрийг цэгцэлж өгнө.
 
 Зарчим:
-- Хугацаа хэтэрсэн, өнөөдөр дуусах, яаралтай, өөр хэлтсээс ирсэн хүсэлтийг эхэнд тавь. Батлах хүсэлт хүлээгдэж байвал түүнийг бас дурд.
+- Хугацаа хэтэрсэн, өнөөдөр дуусах, яаралтай, өөр хэлтсээс ирсэн хүсэлтийг эхэнд тавь.
 - focus: өнөөдөр бодитоор хийж болох 3-6 ажил, хийх дарааллаар. Ажлын өдөр 09:00-18:00, 12:00-13:00 цайны цаг. Том ажлыг өглөө, жижгийг үдээс хойш.
 - suggestions: зөвхөн үнэхээр хэрэгтэй үед. Хугацаа нь бодитой биш бол reschedule, ач холбогдол нь буруу бол reprioritize, хэт ачаалалтай бол reassign (зөвхөн colleagues жагсаалтын id), хэт том бол split, хийгдээд дууссан бололтой бол close. task_id нь заавал өгөгдсөн жагсаалтын id байна.
-- risks: хугацаа тулсан, саад болж буй, өчигдрийн тайлан дахь blockers зэрэг.
+- risks: хугацаа тулсан, саад болж буй, хэт ачаалал зэрэг.
 - Бүх текстийг монгол хэлээр, товч, тодорхой бич. Ажлын нэрийг өөрчлөхгүй. Байхгүй ажил зохиохгүй.`;
 
 export class AgentError extends Error {}
@@ -26,7 +26,7 @@ export class AgentError extends Error {}
 export async function organizeDay(snap: OrgSnapshot, person: Profile, date: string): Promise<AgentPlan> {
   if (!aiConfigured()) throw new AgentError("ANTHROPIC_API_KEY тохируулаагүй байна");
   const input = planInput(snap, person, date);
-  if (!input.tasks.length && !input.approvals_waiting_for_me.length) {
+  if (!input.tasks.length) {
     return { summary: "Танд одоогоор нээлттэй ажил алга. Шинэ ажил төлөвлөх эсвэл багтаа туслах сайхан өдөр.", focus: [], suggestions: [], risks: [] };
   }
 

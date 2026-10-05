@@ -133,7 +133,7 @@ export default function DepartmentsPage() {
                       {members.slice(0, 5).map((p) => (
                         <Avatar key={p.id} profile={p} size={24} />
                       ))}
-                      {members.length > 5 && <span className="grid size-6 place-items-center rounded-full bg-zinc-100 text-[10px] font-semibold text-zinc-500 ring-2 ring-white">+{members.length - 5}</span>}
+                      {members.length > 5 && <span className="grid size-6 place-items-center rounded-full bg-zinc-100 text-[10px] font-semibold text-zinc-500 ring-2 ring-surface-solid">+{members.length - 5}</span>}
                     </div>
                   </div>
 

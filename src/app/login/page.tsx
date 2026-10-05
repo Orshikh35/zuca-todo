@@ -51,57 +51,53 @@ function LoginInner() {
   }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
-      {/* Зүүн тал — брэнд */}
-      <div className="relative hidden overflow-hidden bg-gradient-to-br from-sky-400 via-brand-500 to-brand-700 p-12 text-white lg:flex lg:flex-col lg:justify-between">
-        <div className="absolute -top-24 -right-24 size-96 rounded-full bg-white/10 blur-2xl" />
-        <div className="absolute bottom-0 left-0 size-72 rounded-full bg-sky-300/20 blur-3xl" />
-        <div className="relative flex items-center gap-2.5 text-lg font-semibold">
-          <img src="/icon.svg" alt="" className="size-9 rounded-xl ring-2 ring-white/30" />
-          ZUCA Ops
+    <div className="grid min-h-screen gap-4 p-3 sm:p-4 lg:grid-cols-[1.1fr_1fr]">
+      {/* Зүүн тал — bento брэнд */}
+      <div className="hidden grid-cols-6 grid-rows-[auto_1fr_auto] gap-4 lg:grid">
+        <div className="col-span-6 flex items-center gap-1.5 px-2 pt-2 text-xl tracking-tight">
+          <b className="font-semibold">zuca</b>
+          <span className="text-zinc-400">ops</span>
         </div>
-        <div className="relative max-w-md">
-          <h1 className="text-4xl leading-tight font-semibold tracking-tight">
-            Багийн ажил, зуслан, тайлан — нэг дор.
-          </h1>
-          <p className="mt-4 text-white/80">
-            Яаралтай ажлаа эхэнд нь тавьж, Монголын бүх зуслангийн мэдээллийн дутууг нэг дороос хянаарай.
-          </p>
-          <div className="mt-8 grid grid-cols-3 gap-3 text-sm">
-            {[
-              ["Kanban", "Чирж зөөх самбар"],
-              ["Pipeline", "Зуслан татах явц"],
-              ["Тайлан", "Долоо хоног бүр"],
-            ].map(([a, b]) => (
-              <div key={a} className="rounded-xl bg-white/10 p-3 ring-1 ring-white/20 backdrop-blur">
-                <div className="font-semibold">{a}</div>
-                <div className="text-xs text-white/70">{b}</div>
-              </div>
-            ))}
+        <div className="relative col-span-6 overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#86ebc6] via-[#c2f27c] to-[#eef98f] p-10 text-neutral-900">
+          <div className="pointer-events-none absolute -right-20 -bottom-28 size-96 rotate-12 rounded-[4rem] bg-white/25" />
+          <div className="relative flex h-full max-w-md flex-col justify-end">
+            <h1 className="text-[2.75rem] leading-[1.05] font-semibold tracking-tight">ZUCA-гийн ажил, зуслан — нэг дор.</h1>
+            <p className="mt-4 text-neutral-900/70">
+              Ажил чат, Telegram, zuca.mn-ээс автоматаар орж ирнэ. AI туслах өдрийг тань цэгцэлж, зуслангийн мэдээллийг орой бүр шинэчилнэ.
+            </p>
           </div>
         </div>
-        <div className="relative text-xs text-white/60">zuca.mn · дотоод хэрэгсэл</div>
+        {[
+          ["AI туслах", "Чатаас ажил үүсгэнэ", "from-[#c9b8ff] to-[#9d8bff]"],
+          ["Telegram", "Шинэ ажил шууд ирнэ", "from-[#ffc29a] to-[#ff94ad]"],
+          ["zuca.mn", "Орой бүр синк", "from-[#bfe3ff] to-[#8fb8ff]"],
+        ].map(([a, b, tone]) => (
+          <div key={a} className={`col-span-2 rounded-[1.75rem] bg-gradient-to-br p-5 text-neutral-900 ${tone}`}>
+            <div className="text-[15px] font-semibold">{a}</div>
+            <div className="mt-6 text-xs text-neutral-900/70">{b}</div>
+          </div>
+        ))}
       </div>
 
       {/* Баруун тал — форм */}
-      <div className="flex items-center justify-center p-6">
+      <div className="glass flex items-center justify-center rounded-[2rem] p-6 sm:p-10">
         <div className="w-full max-w-sm">
-          <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-            <img src="/icon.svg" alt="" className="size-9 rounded-xl" />
-            <span className="text-lg font-semibold">ZUCA Ops</span>
+          <div className="mb-8 flex items-center gap-1.5 text-xl tracking-tight lg:hidden">
+            <b className="font-semibold">zuca</b>
+            <span className="text-zinc-400">ops</span>
           </div>
-          <h2 className="text-2xl font-semibold tracking-tight">{tab === "in" ? "Тавтай морил" : "Багт нэгдэх"}</h2>
+          <h2 className="text-3xl font-semibold tracking-tight">{tab === "in" ? "Тавтай морил" : "Багт нэгдэх"}</h2>
           <p className="mt-1 text-sm text-zinc-500">
             {tab === "in" ? "Багийн бүртгэлээрээ нэвтэрнэ үү" : "Шинэ гишүүний бүртгэл үүсгэх"}
           </p>
 
-          <div className="mt-6 grid grid-cols-2 rounded-lg bg-zinc-200/60 p-0.5 text-sm font-medium">
+          <div className="mt-6 grid grid-cols-2 rounded-full bg-zinc-100 p-1 text-sm font-medium">
             {(["in", "up"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => setTab(t)}
-                className={cn("h-8 cursor-pointer rounded-md transition", tab === t ? "bg-white shadow-card" : "text-zinc-500")}
+                className={cn("h-9 cursor-pointer rounded-full transition", tab === t ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900" : "text-zinc-500")}
               >
                 {t === "in" ? "Нэвтрэх" : "Бүртгүүлэх"}
               </button>
@@ -130,7 +126,7 @@ function LoginInner() {
               </div>
             )}
 
-            <Button variant="primary" className="h-10 w-full" disabled={busy}>
+            <Button variant="primary" className="h-11 w-full" disabled={busy}>
               {busy ? <Loader2 size={16} className="animate-spin" /> : <>{tab === "in" ? "Нэвтрэх" : "Бүртгүүлэх"} <ArrowRight size={16} /></>}
             </Button>
           </form>

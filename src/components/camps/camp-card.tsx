@@ -19,12 +19,18 @@ export function CampCard({ camp, onOpen, overlay }: { camp: Camp; onOpen?: (c: C
     <article
       onClick={() => !overlay && onOpen?.(camp)}
       className={cn(
-        "cursor-grab rounded-xl border border-zinc-200/80 bg-white p-3 shadow-card transition select-none",
-        !overlay && "hover:-translate-y-px hover:border-zinc-300 hover:shadow-md",
+        "raised relative cursor-grab overflow-hidden rounded-[1.25rem] p-3.5 transition select-none [&>*:not(.tint)]:relative",
+        !overlay && "hover:-translate-y-0.5",
       )}
     >
+      <div
+        className={cn(
+          "tint pointer-events-none absolute inset-0 bg-gradient-to-br via-transparent to-transparent",
+          score >= 90 ? "from-emerald-400/18" : score >= 60 ? "from-amber-400/16" : "from-rose-500/16",
+        )}
+      />
       <div className="flex items-start justify-between gap-2">
-        <h4 className="text-[13.5px] leading-snug font-semibold text-zinc-900">{camp.name}</h4>
+        <h4 className="text-sm leading-snug font-medium text-zinc-900">{camp.name}</h4>
         <span className={cn("tabular shrink-0 text-xs font-semibold", tone.text)}>{score}%</span>
       </div>
       <div className="mt-1 flex items-center gap-3 text-xs text-zinc-500">
@@ -45,17 +51,17 @@ export function CampCard({ camp, onOpen, overlay }: { camp: Camp; onOpen?: (c: C
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1">
         {camp.website?.includes("zuca.mn") && (
-          <span className="inline-flex items-center gap-1 rounded bg-brand-50 px-1.5 py-px text-[10.5px] font-semibold text-brand-700 ring-1 ring-brand-200 ring-inset">
+          <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10.5px] font-semibold text-brand-700">
             <Globe size={10} /> zuca.mn
           </span>
         )}
-        {own && <span className={cn("rounded px-1.5 py-px text-[10.5px] font-medium ring-1 ring-inset", own.chip)}>{own.short}</span>}
+        {own && <span className={cn("rounded-full px-2 py-0.5 text-[10.5px] font-medium", own.chip)}>{own.short}</span>}
         {camp.capacity != null && <span className="text-[10.5px] text-zinc-400">{camp.capacity} хүүхэд</span>}
       </div>
       {missing.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {missing.slice(0, 3).map((m) => (
-            <span key={m.key} className="rounded bg-amber-50 px-1.5 py-px text-[10.5px] font-medium text-amber-800 ring-1 ring-amber-200/70 ring-inset">
+            <span key={m.key} className="rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-medium text-amber-800">
               {m.label}
             </span>
           ))}

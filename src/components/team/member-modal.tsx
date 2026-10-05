@@ -7,7 +7,7 @@ import type { Profile, ProfileInput } from "@/lib/types";
 import { ROLES } from "@/lib/constants";
 import { atLeast, canEditProfile, canSetRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import { Button, Modal } from "@/components/ui";
+import { Button, Modal, Select } from "@/components/ui";
 
 export const MEMBER_COLORS = [
   "#4f46e5", "#0891b2", "#ea580c", "#16a34a",
@@ -65,7 +65,7 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
   const isMe = member?.id === me?.id;
   const editable = canEditProfile(me, member, departments);
   // Эрх: зөвхөн дээд түвшний хүн өөрчилнө, өөрийн эрхийг өөрөө өсгөхгүй
-  const roleOptions = ROLES.filter((r) => r.id === f.role || (canSetRole(me, r.id) && (!member || canSetRole(me, member.role))));
+  const roleOptions = ROLES.filter((r) => r.id === f.role || (r.selectable && canSetRole(me, r.id) && (!member || canSetRole(me, member.role))));
   const canDelete = member && !isMe && atLeast(me, "manager") && editable;
   const assigned = member ? tasks.filter((t) => t.assignee_id === member.id && t.status !== "done").length : 0;
 
@@ -173,18 +173,18 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
         <div className="grid gap-3.5 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="m-dept">Хэлтэс</label>
-            <select id="m-dept" className="field" value={f.department_id} onChange={(e) => set("department_id", e.target.value)}>
+            <Select id="m-dept" className="field" value={f.department_id} onChange={(e) => set("department_id", e.target.value)}>
               <option value="">— Хэлтэсгүй —</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="label" htmlFor="m-role">Эрхийн түвшин</label>
-            <select
+            <Select
               id="m-role"
               className="field"
               value={f.role}
@@ -196,15 +196,15 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
                   {r.label}
                 </option>
               ))}
-            </select>
+            </Select>
             <p className="mt-1 text-[11px] text-zinc-400">{ROLES.find((r) => r.id === f.role)?.hint}</p>
           </div>
           <div>
             <label className="label" htmlFor="m-active">Төлөв</label>
-            <select id="m-active" className="field" value={f.active ? "1" : "0"} onChange={(e) => set("active", e.target.value === "1")}>
+            <Select id="m-active" className="field" value={f.active ? "1" : "0"} onChange={(e) => set("active", e.target.value === "1")}>
               <option value="1">Ажиллаж байгаа</option>
               <option value="0">Идэвхгүй (гарсан)</option>
-            </select>
+            </Select>
           </div>
           <div>
             <label className="label" htmlFor="m-tg">Telegram chat ID</label>

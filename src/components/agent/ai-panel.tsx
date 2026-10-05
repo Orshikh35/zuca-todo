@@ -40,7 +40,7 @@ function writeCache(key: string, v: Cached) {
 const EXAMPLES = ["Бат маргааш Хөх тэнгэрт залгаж намрын хуваарь авах", "Надад хугацаа хэтэрсэн ажил юу байна?", "Төлбөрийн буцаалтын ажлыг яаралтай болго"];
 
 /** Самбарын AI туслах: өнөөдрийн төлөвлөгөө + AI-д шууд хэлэх */
-export function AiPanel({ onOpenTask }: { onOpenTask: (t: Task) => void }) {
+export function AiPanel({ onOpenTask, className }: { onOpenTask: (t: Task) => void; className?: string }) {
   const { me, mode, profiles, tasks, departments, approvals, dailyReports, logAgentRun, toast } = useStore();
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [cached, setCached] = useState<Cached | null>(null);
@@ -103,7 +103,7 @@ export function AiPanel({ onOpenTask }: { onOpenTask: (t: Task) => void }) {
   const aiOff = status?.ai === false;
 
   return (
-    <Card className="mt-6 overflow-hidden">
+    <Card className={cn("overflow-hidden", className ?? "mt-6")}>
       <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-4 pb-3">
         <div className="flex items-start gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-violet-500 text-white">
@@ -289,7 +289,7 @@ function AskBox({ onOpenTask, disabled }: { onOpenTask: (t: Task) => void; disab
               <button
                 key={kind + t.id}
                 onClick={() => onOpenTask(cur)}
-                className="flex w-full cursor-pointer items-center gap-2 rounded-lg bg-white px-2.5 py-2 text-left ring-1 ring-zinc-200 hover:ring-brand-300"
+                className="flex w-full cursor-pointer items-center gap-2 rounded-lg bg-surface px-2.5 py-2 text-left ring-1 ring-zinc-200 hover:ring-brand-300"
               >
                 <span className={cn("shrink-0 rounded px-1.5 py-px text-[10px] font-semibold", kind === "Шинэ" ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700")}>{kind}</span>
                 <span className="min-w-0 flex-1 truncate font-medium">{cur.title}</span>

@@ -14,9 +14,11 @@ import {
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { DayPlan } from "@/components/agent/day-plan";
+import { CardTitle, Hero, HeroChip, heroBtn } from "@/components/bento";
 import { TaskModal } from "@/components/tasks/task-modal";
-import { Avatar, Button, Card, Empty, PageHeader, PriorityChip, Segmented } from "@/components/ui";
+import { Avatar, Button, Card, Empty, PageHeader, PriorityChip, Segmented, Select } from "@/components/ui";
 import { agentFetch, type AgentStatus } from "@/lib/agent/client";
 import { buildDigest, digestHtml, digestTelegram, type OrgSnapshot } from "@/lib/agent/digest";
 import type { AgentPlan } from "@/lib/agent/schema";
@@ -61,6 +63,11 @@ export default function AgentPage() {
     [person, snapshot, plan, planFor],
   );
 
+  const aiTasks = useMemo(() => {
+    const since = Date.now() - 30 * 86_400_000;
+    return tasks.filter((t) => t.source && t.source !== "manual" && Date.parse(t.created_at) >= since);
+  }, [tasks]);
+
   async function organize() {
     if (!person) return;
     setThinking(true);
@@ -84,25 +91,52 @@ export default function AgentPage() {
         subtitle="Өдрийн ажлыг цэгцэлж, өглөө бүр имэйл болон Telegram-аар хүн бүрт илгээнэ"
         actions={
           reachable.length > 1 && (
-            <select className="field h-9 w-auto" value={personId} onChange={(e) => (setPersonId(e.target.value), setApplied(new Set()))}>
+            <Select className="field h-10 w-auto rounded-full" value={personId} onChange={(e) => (setPersonId(e.target.value), setApplied(new Set()))}>
               {reachable.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.id === me?.id ? `Би (${p.full_name})` : p.full_name}
                 </option>
               ))}
-            </select>
+            </Select>
           )
         }
       />
 
-      <StatusStrip status={status} />
+      {/* Bento товчоо */}
+      <div className="flex flex-wrap gap-4">
+        <Hero
+          tone="lavender"
+          className="min-w-0 flex-[5_1_340px]"
+          title="AI-аар бүртгэгдсэн ажил"
+          value={aiTasks.length}
+          unit="сүүлийн 30 хоног"
+          chips={
+            <>
+              <HeroChip>💬 Чат {aiTasks.filter((t) => t.source === "chat").length}</HeroChip>
+              <HeroChip>🌐 zuca.mn / имэйл {aiTasks.filter((t) => t.source === "intake").length}</HeroChip>
+              <HeroChip>⚙️ Автомат {aiTasks.filter((t) => t.source === "auto").length}</HeroChip>
+            </>
+          }
+          actions={
+            <>
+              <button onClick={() => void organize()} disabled={thinking || status?.ai === false} className={cn(heroBtn.dark, "disabled:opacity-60")}>
+                {thinking ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />} Өдрөө цэгцлэх
+              </button>
+              <Link href="/chat" className={heroBtn.light}>
+                <Sparkles size={15} /> Чатад @ai гэж асуух
+              </Link>
+            </>
+          }
+        />
+        <StatusStrip status={status} className="min-w-0 flex-[7_1_380px]" />
+      </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_1fr]">
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_1fr]">
         {/* ── Цэгцлэх ── */}
         <Card className="min-w-0">
           <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
             <div>
-              <h2 className="text-[15px] font-semibold">{person?.id === me?.id ? "Миний өнөөдөр" : `${person?.full_name}-ийн өнөөдөр`}</h2>
+              <h2 className="text-lg font-medium tracking-tight">{person?.id === me?.id ? "Миний өнөөдөр" : `${person?.full_name}-ийн өнөөдөр`}</h2>
               <p className="mt-0.5 text-xs text-zinc-500">
                 {digest?.total ?? 0} нээлттэй ажил · AI дараалал, цагийн хуваарь, цэгцлэх санал гаргана
               </p>
@@ -141,7 +175,7 @@ export default function AgentPage() {
                       <ul className="space-y-1">
                         {s.tasks.slice(0, 6).map((t) => (
                           <li key={t.id}>
-                            <button onClick={() => setOpenTask(t)} className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-zinc-50">
+                            <button onClick={() => setOpenTask(t)} className="flex w-full cursor-pointer items-center gap-2 rounded-2xl px-2.5 py-2 text-left text-sm hover:bg-zinc-100">
                               <PriorityChip priority={t.priority} compact />
                               <span className="truncate">{t.title}</span>
                             </button>
@@ -159,11 +193,11 @@ export default function AgentPage() {
         </Card>
 
         {/* ── Урьдчилан харах + илгээх ── */}
-        <div className="flex min-w-0 flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-4">
           <Card>
             <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
               <div>
-                <h2 className="text-[15px] font-semibold">Өглөөний мессеж</h2>
+                <h2 className="text-lg font-medium tracking-tight">Өглөөний мессеж</h2>
                 <p className="mt-0.5 text-xs text-zinc-500">{person?.full_name}-д очих хэлбэр{plan && planFor === person?.id ? " · AI төлөвлөгөөтэй" : ""}</p>
               </div>
               <Segmented
@@ -182,7 +216,7 @@ export default function AgentPage() {
                 ) : (
                   <div className="scroll-thin h-[420px] overflow-y-auto rounded-xl bg-[#8ea8c3] p-4">
                     <div
-                      className="max-w-[92%] rounded-2xl rounded-bl-sm bg-white px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap shadow-sm [&_a]:text-sky-600 [&_code]:font-mono"
+                      className="max-w-[92%] rounded-2xl rounded-bl-sm bg-surface px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap shadow-sm [&_a]:text-sky-600 [&_code]:font-mono"
                       dangerouslySetInnerHTML={{ __html: digestTelegram(digest) }}
                     />
                   </div>
@@ -194,11 +228,11 @@ export default function AgentPage() {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
         {me && <MyChannels status={status} ctx={ctx} onToggle={(patch) => void updateProfile(me.id, patch)} />}
         <Card>
           <div className="px-5 pt-4 pb-3">
-            <h2 className="text-[15px] font-semibold">Илгээлтийн түүх</h2>
+            <h2 className="text-lg font-medium tracking-tight">Илгээлтийн түүх</h2>
             <p className="mt-0.5 text-xs text-zinc-500">Сүүлийн илгээлт, AI цэгцлэлт</p>
           </div>
           {!agentRuns.length ? (
@@ -232,28 +266,37 @@ export default function AgentPage() {
 
 type Ctx = Parameters<typeof agentFetch>[2];
 
-function StatusStrip({ status }: { status: AgentStatus | null }) {
+function StatusStrip({ status, className }: { status: AgentStatus | null; className?: string }) {
   const items = [
     { key: "ai", label: "Claude AI", ok: status?.ai, hint: status?.ai ? status.model : "ANTHROPIC_API_KEY" },
-    { key: "email", label: "Имэйл (SMTP)", ok: status?.email, hint: status?.email ? "бэлэн" : "SMTP_HOST, SMTP_USER, SMTP_PASS" },
     { key: "telegram", label: "Telegram bot", ok: status?.telegram, hint: status?.bot ? `@${status.bot.replace(/^@/, "")}` : "TELEGRAM_BOT_TOKEN" },
-    { key: "cron", label: "Өглөө 07:00 автомат", ok: status?.cron && status?.serviceRole, hint: status?.cron ? (status.serviceRole ? "Vercel Cron" : "SUPABASE_SERVICE_ROLE_KEY") : "CRON_SECRET" },
-    { key: "intake", label: "Имэйл / zuca.mn → ажил", ok: status?.intake && status?.serviceRole, hint: status?.intake ? (status.serviceRole ? "/api/intake бэлэн" : "SUPABASE_SERVICE_ROLE_KEY") : "INTAKE_SECRET" },
+    { key: "intake", label: "zuca.mn / имэйл → ажил", ok: status?.intake && status?.serviceRole, hint: status?.intake ? (status.serviceRole ? "/api/intake бэлэн" : "SUPABASE_SERVICE_ROLE_KEY") : "INTAKE_SECRET" },
+    { key: "cron", label: "Өглөө 07:00 · орой 21:00", ok: status?.cron && status?.serviceRole, hint: status?.cron ? (status.serviceRole ? "Өглөөний товчоо, zuca.mn синк" : "SUPABASE_SERVICE_ROLE_KEY") : "CRON_SECRET" },
+    { key: "email", label: "Имэйл (SMTP)", ok: status?.email, hint: status?.email ? "бэлэн" : "SMTP_HOST, SMTP_USER, SMTP_PASS" },
   ];
+  const ready = items.filter((i) => i.ok).length;
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-      {items.map((i) => (
-        <Card key={i.key} className="flex items-center gap-3 p-3.5">
-          <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg", status == null ? "bg-zinc-100 text-zinc-300" : i.ok ? "bg-emerald-50 text-emerald-600" : "bg-zinc-100 text-zinc-400")}>
-            {status == null ? <Loader2 size={15} className="animate-spin" /> : i.ok ? <Check size={16} /> : <CircleAlert size={16} />}
-          </span>
-          <div className="min-w-0">
-            <div className="text-sm font-medium">{i.label}</div>
-            <div className="truncate text-[11px] text-zinc-400">{i.ok ? i.hint : `Тохируулаагүй · ${i.hint}`}</div>
+    <section className={cn("glass rounded-[1.75rem] p-5 sm:p-6", className)}>
+      <CardTitle title="Холболтууд" sub="Автомат ажиллахад хэрэгтэй тохиргоо" pill={status ? `${ready}/${items.length} бэлэн` : "Шалгаж байна…"} />
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        {items.map((i) => (
+          <div key={i.key} className="flex items-center gap-3 rounded-2xl bg-zinc-100 p-3">
+            <span
+              className={cn(
+                "grid size-9 shrink-0 place-items-center rounded-full",
+                status == null ? "bg-surface-solid text-zinc-300" : i.ok ? "bg-[#c6f36b] text-neutral-900" : "bg-surface-solid text-zinc-400",
+              )}
+            >
+              {status == null ? <Loader2 size={15} className="animate-spin" /> : i.ok ? <Check size={16} /> : <CircleAlert size={16} />}
+            </span>
+            <div className="min-w-0">
+              <div className="text-sm font-medium">{i.label}</div>
+              <div className="truncate text-[11px] text-zinc-500">{i.ok ? i.hint : `Тохируулаагүй · ${i.hint}`}</div>
+            </div>
           </div>
-        </Card>
-      ))}
-    </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -304,7 +347,7 @@ function SendPanel({ status, ctx, withPlan }: { status: AgentStatus | null; ctx:
   return (
     <Card>
       <div className="px-5 pt-4 pb-3">
-        <h2 className="text-[15px] font-semibold">Одоо илгээх</h2>
+        <h2 className="text-lg font-medium tracking-tight">Одоо илгээх</h2>
         <p className="mt-0.5 text-xs text-zinc-500">Өглөө бүр 07:00-д автоматаар очдог. Эндээс гараар шууд илгээж болно.</p>
       </div>
       <div className="space-y-3.5 px-5 pb-5">
@@ -376,7 +419,7 @@ function MyChannels({ status, ctx, onToggle }: { status: AgentStatus | null; ctx
   return (
     <Card>
       <div className="px-5 pt-4 pb-3">
-        <h2 className="text-[15px] font-semibold">Миний мэдэгдэл</h2>
+        <h2 className="text-lg font-medium tracking-tight">Миний мэдэгдэл</h2>
         <p className="mt-0.5 text-xs text-zinc-500">Өглөө бүр өнөөдрийн ажлаа хаанаас авах вэ</p>
       </div>
       <ul className="divide-y divide-zinc-100 border-t border-zinc-100">
@@ -451,7 +494,7 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
       onClick={() => onChange(!on)}
       className={cn("relative h-5 w-9 shrink-0 cursor-pointer rounded-full transition", on ? "bg-brand-600" : "bg-zinc-300")}
     >
-      <span className={cn("absolute top-0.5 size-4 rounded-full bg-white shadow transition-all", on ? "left-[18px]" : "left-0.5")} />
+      <span className={cn("absolute top-0.5 size-4 rounded-full bg-surface shadow transition-all", on ? "left-[18px]" : "left-0.5")} />
     </button>
   );
 }

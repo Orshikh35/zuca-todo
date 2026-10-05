@@ -18,13 +18,12 @@ export async function POST(req: Request) {
         body: JSON.stringify(body),
       }).then((r) => r.json() as Promise<{ ok: boolean; description?: string }>);
 
-    const res = await api("setWebhook", { url, secret_token: secret, allowed_updates: ["message"] });
+    const res = await api("setWebhook", { url, secret_token: secret, allowed_updates: ["message", "callback_query"] });
     if (!res.ok) throw new HttpError(502, `Telegram: ${res.description}`);
     await api("setMyCommands", {
       commands: [
         { command: "today", description: "Өнөөдрийн ажил" },
         { command: "plan", description: "AI-аар өдрөө цэгцлэх" },
-        { command: "report", description: "Өдрийн тайлан илгээх" },
         { command: "id", description: "Чатын ID" },
       ],
     });

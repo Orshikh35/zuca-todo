@@ -1,16 +1,18 @@
 "use client";
 
-import { AlignLeft, ArrowRightLeft, CalendarClock, Check, Tent } from "lucide-react";
+import { AlignLeft, ArrowRightLeft, CalendarClock, Check, Hand, Tent } from "lucide-react";
 import { Avatar, PriorityChip } from "@/components/ui";
 import { useStore } from "@/lib/data/store";
 import type { Task } from "@/lib/types";
 import { cn, dueLabel } from "@/lib/utils";
 
-const edge: Record<Task["priority"], string> = {
-  urgent: "before:bg-red-500",
-  high: "before:bg-orange-400",
-  medium: "before:bg-sky-400",
-  low: "before:bg-zinc-300",
+/** Картын өнгөт туяа — яаралтай байдлаар (дууссан бол ногоон) */
+const TINT: Record<Task["priority"] | "done", string> = {
+  urgent: "from-rose-500/20",
+  high: "from-orange-400/18",
+  medium: "from-sky-400/15",
+  low: "from-zinc-400/10",
+  done: "from-emerald-400/18",
 };
 
 export function TaskCard({
@@ -24,7 +26,7 @@ export function TaskCard({
   overlay?: boolean;
   showStatus?: boolean;
 }) {
-  const { profileById, campById, deptById, updateTask } = useStore();
+  const { me, profileById, campById, deptById, updateTask } = useStore();
   const done = task.status === "done";
   const due = dueLabel(task.due_date);
   const overdue = !done && due?.tone === "overdue";
@@ -36,15 +38,14 @@ export function TaskCard({
     <article
       onClick={() => !overlay && onOpen?.(task)}
       className={cn(
-        "group relative cursor-grab overflow-hidden rounded-xl border bg-white p-3 pl-3.5 shadow-card transition select-none",
-        "before:absolute before:inset-y-0 before:left-0 before:w-[3px]",
-        edge[task.priority],
-        overdue ? "border-red-200" : "border-zinc-200/80",
-        !overlay && "hover:-translate-y-px hover:border-zinc-300 hover:shadow-md",
-        done && "bg-zinc-50/80",
+        "raised group relative cursor-grab overflow-hidden rounded-[1.25rem] p-3.5 transition select-none",
+        overdue && "ring-1 ring-red-500/60",
+        !overlay && "hover:-translate-y-0.5",
+        done && "opacity-70",
       )}
     >
-      <div className="flex items-start gap-2">
+      <div className={cn("pointer-events-none absolute inset-0 bg-gradient-to-br via-transparent to-transparent", TINT[done ? "done" : task.priority])} />
+      <div className="relative flex items-start gap-2">
         <button
           title={done ? "Дахин нээх" : "Дууссан болгох"}
           onPointerDown={(e) => e.stopPropagation()}
@@ -53,19 +54,19 @@ export function TaskCard({
             void updateTask(task.id, { status: done ? "todo" : "done" });
           }}
           className={cn(
-            "mt-0.5 flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-full border transition",
-            done ? "border-emerald-500 bg-emerald-500 text-white" : "border-zinc-300 text-transparent hover:border-emerald-500 hover:text-emerald-500",
+            "mt-px flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full border transition",
+            done ? "border-transparent bg-[#c6f36b] text-neutral-900" : "border-zinc-300 text-transparent hover:border-emerald-500 hover:text-emerald-500",
           )}
         >
-          <Check size={10} strokeWidth={3} />
+          <Check size={11} strokeWidth={3} />
         </button>
-        <h4 className={cn("flex-1 text-[13.5px] leading-snug font-medium text-zinc-900", done && "text-zinc-400 line-through")}>
+        <h4 className={cn("flex-1 text-sm leading-snug font-medium text-zinc-900", done && "text-zinc-400 line-through")}>
           {task.title}
         </h4>
       </div>
 
       {from && (
-        <div className="mt-2 flex items-center gap-1 truncate text-[11px] font-medium text-sky-700">
+        <div className="relative mt-2 flex items-center gap-1 truncate text-[11px] font-medium text-sky-700">
           <ArrowRightLeft size={11} className="shrink-0" />
           <span className="truncate">
             {from.name} → {to?.name ?? "?"}
@@ -74,26 +75,26 @@ export function TaskCard({
       )}
 
       {camp && (
-        <div className="mt-2 flex items-center gap-1 truncate text-xs text-zinc-500">
+        <div className="relative mt-2 flex items-center gap-1 truncate text-xs text-zinc-500">
           <Tent size={12} className="shrink-0 text-zinc-400" />
           <span className="truncate">{camp.name}</span>
         </div>
       )}
 
       {task.tags.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
+        <div className="relative mt-2 flex flex-wrap gap-1">
           {task.tags.map((t) => (
-            <span key={t} className="rounded bg-zinc-100 px-1.5 py-px text-[10.5px] font-medium text-zinc-600">
+            <span key={t} className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10.5px] font-medium text-zinc-600">
               #{t}
             </span>
           ))}
         </div>
       )}
 
-      <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+      <div className="relative mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
         <PriorityChip priority={task.priority} />
         {showStatus && (
-          <span className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium whitespace-nowrap text-zinc-600">
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-zinc-600">
             {{ todo: "Хийх", in_progress: "Хийж байна", review: "Шалгах", done: "Дууссан" }[task.status]}
           </span>
         )}
@@ -112,7 +113,21 @@ export function TaskCard({
           </span>
         )}
         {task.description && <AlignLeft size={12} className="text-zinc-300" />}
-        <Avatar profile={task.assignee_id ? profileById.get(task.assignee_id) : null} size={22} className="ml-auto" />
+        {!task.assignee_id && me && !done ? (
+          <button
+            title="Энэ ажлыг би хариуцъя"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              void updateTask(task.id, { assignee_id: me.id });
+            }}
+            className="ml-auto inline-flex h-6 cursor-pointer items-center gap-1 rounded-full bg-neutral-900 px-2.5 text-[11px] font-medium text-white hover:bg-neutral-700 dark:bg-white dark:text-neutral-900"
+          >
+            <Hand size={11} /> Би авъя
+          </button>
+        ) : (
+          <Avatar profile={task.assignee_id ? profileById.get(task.assignee_id) : null} size={22} className="ml-auto" />
+        )}
       </div>
     </article>
   );

@@ -1,16 +1,37 @@
 @import "tailwindcss";
 
+/* Dark горим: <html class="dark"> (theme-script.ts — систем эсвэл хэрэглэгчийн сонголт) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* ZUCA брэнд — цэнхэр-ягаан (маскот баавгайн малгай) */
   --color-brand-50: #eef2ff;
   --color-brand-100: #e0e7ff;
   --color-brand-200: #c7d2fe;
   --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
   --color-brand-500: #6366f1;
   --color-brand-600: #4f46e5;
   --color-brand-700: #4338ca;
-  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
-  --shadow-lift: 0 12px 32px -8px rgb(16 24 40 / 0.22), 0 4px 8px -4px rgb(16 24 40 / 0.1);
+  --color-brand-800: #3730a3;
+  --color-brand-900: #312e81;
+
+  /* Гадаргуу (glass) — light */
+  --color-canvas: #f2f3f8;
+  --color-surface: rgb(255 255 255 / 0.68);
+  --color-surface-solid: #ffffff;
+  /* Самбар/багана доторх карт — баганаасаа тод ялгарна */
+  --color-raised: #ffffff;
+  --color-line: rgb(24 24 40 / 0.08);
+  --color-ink: #16161d;
+
+  --radius-bento: 1.75rem;
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.03), 0 8px 24px -12px rgb(16 24 40 / 0.12);
+  --shadow-lift: 0 24px 48px -16px rgb(16 24 40 / 0.28), 0 4px 12px -4px rgb(16 24 40 / 0.1);
+  --shadow-glass: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 1px 2px rgb(16 24 40 / 0.03), 0 10px 30px -14px rgb(16 24 40 / 0.16);
+
   --animate-in: fade-in 160ms ease-out;
   --animate-slide: slide-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
   --animate-pop: pop-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -29,15 +50,121 @@
   }
 }
 
+/* ───────── Dark: саарал шкалыг урвуулж, өнгөт чипүүдийг харанхуйд тохируулна ─────────
+   Ингэснээр бүх хуудасны bg-zinc-*, text-zinc-*, bg-red-50 гэх мэт класс өөрчлөлтгүйгээр dark-д зөв харагдана. */
+.dark {
+  color-scheme: dark;
+  --color-canvas: #08080d;
+  --color-surface: rgb(26 26 36 / 0.62);
+  --color-surface-solid: #16161f;
+  --color-raised: #2a2a37;
+  --color-line: rgb(255 255 255 / 0.08);
+  --color-ink: #f4f4f7;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 10px 30px -14px rgb(0 0 0 / 0.6);
+  --shadow-lift: 0 24px 60px -16px rgb(0 0 0 / 0.75);
+  --shadow-glass: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 10px 30px -14px rgb(0 0 0 / 0.6);
+
+  --color-zinc-50: rgb(255 255 255 / 0.035);
+  --color-zinc-100: rgb(255 255 255 / 0.07);
+  --color-zinc-200: rgb(255 255 255 / 0.1);
+  --color-zinc-300: rgb(255 255 255 / 0.2);
+  --color-zinc-400: #868694;
+  --color-zinc-500: #9d9daa;
+  --color-zinc-600: #b8b8c4;
+  --color-zinc-700: #d2d2da;
+  --color-zinc-800: #e4e4ea;
+  --color-zinc-900: #f4f4f7;
+  --color-zinc-950: #ffffff;
+
+  --color-brand-50: color-mix(in oklab, #6366f1 16%, transparent);
+  --color-brand-100: color-mix(in oklab, #6366f1 24%, transparent);
+  --color-brand-200: color-mix(in oklab, #6366f1 34%, transparent);
+  --color-brand-700: #8f93fb;
+  --color-brand-800: #b7bafd;
+  --color-brand-900: #dcdeff;
+
+  --color-red-50: color-mix(in oklab, #ef4444 14%, transparent);
+  --color-red-100: color-mix(in oklab, #ef4444 22%, transparent);
+  --color-red-200: color-mix(in oklab, #ef4444 32%, transparent);
+  --color-red-600: #f87171;
+  --color-red-700: #fca5a5;
+  --color-red-800: #fecaca;
+  --color-red-900: #fee2e2;
+
+  --color-amber-50: color-mix(in oklab, #f59e0b 13%, transparent);
+  --color-amber-100: color-mix(in oklab, #f59e0b 20%, transparent);
+  --color-amber-200: color-mix(in oklab, #f59e0b 30%, transparent);
+  --color-amber-600: #fbbf24;
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fde68a;
+  --color-amber-900: #fef3c7;
+  --color-amber-950: #fffbeb;
+
+  --color-emerald-50: color-mix(in oklab, #10b981 14%, transparent);
+  --color-emerald-100: color-mix(in oklab, #10b981 22%, transparent);
+  --color-emerald-200: color-mix(in oklab, #10b981 32%, transparent);
+  --color-emerald-600: #34d399;
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #a7f3d0;
+
+  --color-sky-50: color-mix(in oklab, #0ea5e9 14%, transparent);
+  --color-sky-100: color-mix(in oklab, #0ea5e9 22%, transparent);
+  --color-sky-200: color-mix(in oklab, #0ea5e9 32%, transparent);
+  --color-sky-600: #38bdf8;
+  --color-sky-700: #7dd3fc;
+  --color-sky-800: #bae6fd;
+  --color-sky-900: #e0f2fe;
+
+  --color-orange-50: color-mix(in oklab, #f97316 14%, transparent);
+  --color-orange-200: color-mix(in oklab, #f97316 32%, transparent);
+  --color-orange-600: #fb923c;
+  --color-orange-700: #fdba74;
+
+  --color-violet-50: color-mix(in oklab, #8b5cf6 15%, transparent);
+  --color-violet-200: color-mix(in oklab, #8b5cf6 32%, transparent);
+  --color-violet-600: #a78bfa;
+  --color-violet-700: #c4b5fd;
+
+  --color-teal-50: color-mix(in oklab, #14b8a6 14%, transparent);
+  --color-teal-200: color-mix(in oklab, #14b8a6 32%, transparent);
+  --color-teal-700: #5eead4;
+  --color-pink-50: color-mix(in oklab, #ec4899 14%, transparent);
+  --color-pink-200: color-mix(in oklab, #ec4899 32%, transparent);
+  --color-pink-700: #f9a8d4;
+  --color-lime-50: color-mix(in oklab, #84cc16 14%, transparent);
+  --color-lime-200: color-mix(in oklab, #84cc16 32%, transparent);
+  --color-lime-800: #d9f99d;
+  --color-blue-50: color-mix(in oklab, #3b82f6 14%, transparent);
+  --color-blue-200: color-mix(in oklab, #3b82f6 32%, transparent);
+  --color-blue-700: #93c5fd;
+  --color-rose-300: #fb7185;
+}
+
 html,
 body {
-  background: #f6f6f7;
-  color: #18181b;
+  color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
 }
 
+/* Liquid glass дэвсгэр — зөөлөн өнгөт туяа (glass карт ард нь гэрэлтэнэ) */
+body {
+  min-height: 100dvh;
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(1100px 620px at 8% -8%, rgb(129 140 248 / 0.28), transparent 62%),
+    radial-gradient(900px 520px at 100% 0%, rgb(244 114 182 / 0.16), transparent 58%),
+    radial-gradient(1000px 640px at 55% 112%, rgb(163 230 53 / 0.18), transparent 62%);
+  background-attachment: fixed;
+}
+.dark body {
+  background-image:
+    radial-gradient(1000px 600px at 10% -12%, rgb(99 102 241 / 0.3), transparent 60%),
+    radial-gradient(800px 520px at 100% 6%, rgb(168 85 247 / 0.18), transparent 56%),
+    radial-gradient(900px 620px at 50% 118%, rgb(16 185 129 / 0.12), transparent 60%);
+}
+
 ::selection {
-  background: var(--color-brand-100);
+  background: var(--color-brand-200);
 }
 
 .tabular {
@@ -47,12 +174,50 @@ body {
 /* Нарийн scrollbar */
 .scroll-thin {
   scrollbar-width: thin;
-  scrollbar-color: #d4d4d8 transparent;
+  scrollbar-color: var(--color-zinc-300) transparent;
 }
 
 @layer components {
+  /* Liquid glass гадаргуу */
+  .glass {
+    background-color: var(--color-surface);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    backdrop-filter: blur(22px) saturate(160%);
+    border: 1px solid var(--color-line);
+    box-shadow: var(--shadow-glass);
+  }
+
+  /* Kanban багана — карт дээрээ тод ялгарахаар хотгор, бүдэг */
+  .lane {
+    background-color: rgb(255 255 255 / 0.38);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid var(--color-line);
+  }
+  .dark .lane {
+    background-color: rgb(0 0 0 / 0.22);
+    border-color: rgb(255 255 255 / 0.06);
+  }
+
+  /* Багана доторх карт */
+  .raised {
+    background-color: var(--color-raised);
+    border: 1px solid var(--color-line);
+    box-shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 6px 16px -10px rgb(16 24 40 / 0.18);
+  }
+  .dark .raised {
+    border-color: rgb(255 255 255 / 0.1);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.07), 0 10px 24px -12px rgb(0 0 0 / 0.9);
+  }
+
   .field {
-    @apply w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-brand-500 focus:ring-3 focus:ring-brand-100;
+    @apply w-full rounded-xl border border-zinc-200 bg-surface-solid px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-brand-500 focus:ring-3 focus:ring-brand-100;
+  }
+  .dark .field {
+    background-color: rgb(255 255 255 / 0.04);
+  }
+  .dark select.field option {
+    background: var(--color-surface-solid);
   }
 
   .label {

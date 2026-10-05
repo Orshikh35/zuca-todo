@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { TaskModal } from "@/components/tasks/task-modal";
-import { Avatar, Button, Card, Empty, Modal, PriorityChip } from "@/components/ui";
+import { Avatar, Button, Card, Empty, Modal, PriorityChip, Select } from "@/components/ui";
 import type { AgentStatus } from "@/lib/agent/client";
 import { markRead, useChannels, useChatUnread, useMessages } from "@/lib/chat/hooks";
 import { STATUSES } from "@/lib/constants";
@@ -164,20 +164,20 @@ function ChatApp() {
     canManageOrg(me) || ch.created_by === me?.id || (!!ch.department_id && canManageDept(me, deptById.get(ch.department_id)));
 
   return (
-    <div className="-mx-4 -my-6 flex h-[calc(100dvh-49px)] sm:-mx-6 lg:-mx-8 lg:-my-8 lg:h-dvh">
+    <div className="glass flex h-[calc(100dvh-11rem)] overflow-hidden rounded-[1.75rem] lg:-my-3 lg:h-[calc(100dvh-1.5rem)]">
       {/* ── Сувгууд ── */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-200/70 bg-white md:flex">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-zinc-200/70 md:flex">
         <div className="flex items-center justify-between px-4 pt-5 pb-3">
           <div>
-            <h1 className="text-lg font-semibold tracking-tight">Чат</h1>
+            <h1 className="text-xl font-semibold tracking-tight">Чат</h1>
             <p className="text-[11px] text-zinc-400">Ажил дурдвал AI өөрөө бүртгэнэ</p>
           </div>
-          <button onClick={() => setNewOpen(true)} title="Шинэ суваг" className="cursor-pointer rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900">
+          <button onClick={() => setNewOpen(true)} title="Шинэ суваг" className="grid size-9 cursor-pointer place-items-center rounded-full bg-surface-solid text-zinc-600 shadow-sm hover:text-zinc-900">
             <Plus size={18} />
           </button>
         </div>
         <ChannelList channels={channels} active={active} unread={unread.byChannel} onPick={setSlug} />
-        <div className="m-3 rounded-xl bg-brand-50/70 p-3 text-[11px] leading-relaxed text-brand-900">
+        <div className="m-3 rounded-[1.25rem] bg-gradient-to-br from-[#d6cbff] to-[#9d8bff] p-3.5 text-[11px] leading-relaxed text-neutral-900">
           <div className="mb-1 flex items-center gap-1 font-semibold">
             <Sparkles size={12} /> ZUCA AI
           </div>
@@ -186,7 +186,7 @@ function ChatApp() {
       </aside>
 
       {/* ── Мессежүүд ── */}
-      <section className="flex min-w-0 flex-1 flex-col bg-zinc-50/40">
+      <section className="flex min-w-0 flex-1 flex-col">
         {loading ? (
           <div className="flex flex-1 items-center justify-center text-zinc-400">
             <Loader2 className="animate-spin" />
@@ -205,8 +205,8 @@ function ChatApp() {
           </div>
         ) : (
           <>
-            <header className="flex items-center gap-3 border-b border-zinc-200/70 bg-white px-4 py-3">
-              <select className="field h-9 w-auto max-w-[45vw] md:hidden" value={active.slug} onChange={(e) => setSlug(e.target.value)}>
+            <header className="flex items-center gap-3 border-b border-zinc-200/70 px-4 py-3">
+              <Select className="field h-9 w-auto max-w-[45vw] md:hidden" value={active.slug} onChange={(e) => setSlug(e.target.value)}>
                 {channels.map((c) => {
                   const n = unread.byChannel.get(c.id) ?? 0;
                   return (
@@ -216,7 +216,7 @@ function ChatApp() {
                     </option>
                   );
                 })}
-              </select>
+              </Select>
               <button onClick={() => setNewOpen(true)} className="rounded-lg p-1.5 text-zinc-500 hover:bg-zinc-100 md:hidden" aria-label="Шинэ суваг">
                 <Plus size={18} />
               </button>
@@ -234,7 +234,7 @@ function ChatApp() {
                   </Button>
                 )}
                 {canEdit(active) ? (
-                  <select
+                  <Select
                     className="field h-8 w-auto py-0 text-xs"
                     value={active.ai_mode}
                     onChange={(e) => void setMode(active, e.target.value as AiMode)}
@@ -245,9 +245,9 @@ function ChatApp() {
                         {m.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 ) : (
-                  <span className="rounded-lg bg-zinc-100 px-2 py-1 text-xs text-zinc-600" title={AI_MODES.find((m) => m.id === active.ai_mode)?.hint}>
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600" title={AI_MODES.find((m) => m.id === active.ai_mode)?.hint}>
                     {AI_MODES.find((m) => m.id === active.ai_mode)?.label}
                   </span>
                 )}
@@ -315,18 +315,22 @@ function ChannelList({
                 key={c.id}
                 onClick={() => onPick(c.slug)}
                 className={cn(
-                  "flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm transition",
-                  on ? "bg-brand-50 font-semibold text-brand-700" : n ? "font-semibold text-zinc-900 hover:bg-zinc-100" : "text-zinc-600 hover:bg-zinc-100",
+                  "flex w-full cursor-pointer items-center gap-2 rounded-full px-3 py-2 text-sm transition",
+                  on
+                    ? "bg-neutral-900 font-medium text-white dark:bg-white dark:text-neutral-900"
+                    : n
+                      ? "font-semibold text-zinc-900 hover:bg-zinc-100"
+                      : "text-zinc-600 hover:bg-zinc-100",
                 )}
               >
-                <Icon size={15} className={on ? "text-brand-600" : "text-zinc-400"} />
+                <Icon size={15} className={on ? "opacity-70" : "text-zinc-400"} />
                 <span className="flex-1 truncate text-left">{c.name}</span>
                 {(c.ai_mode === "auto" || c.ai_mode === "suggest") && (
                   <span title={AI_MODES.find((m) => m.id === c.ai_mode)?.hint}>
-                    <Sparkles size={12} className="text-brand-400" />
+                    <Sparkles size={12} className={on ? "opacity-60" : "text-brand-400"} />
                   </span>
                 )}
-                {n > 0 && !on && <span className="tabular rounded-full bg-brand-600 px-1.5 text-[11px] font-semibold text-white">{n > 99 ? "99+" : n}</span>}
+                {n > 0 && !on && <span className="tabular rounded-full bg-[#ff6b8b] px-1.5 text-[11px] font-semibold text-neutral-900">{n > 99 ? "99+" : n}</span>}
               </button>
             );
           })}
@@ -418,7 +422,7 @@ function MessageList({
               {newDay && (
                 <div className="flex items-center gap-3 px-4 pt-4 pb-1">
                   <span className="h-px flex-1 bg-zinc-200" />
-                  <span className="rounded-full border border-zinc-200 bg-white px-3 py-0.5 text-[11px] font-medium text-zinc-500">{dayLabel(m.created_at)}</span>
+                  <span className="rounded-full bg-zinc-100 px-3 py-0.5 text-[11px] font-medium text-zinc-500">{dayLabel(m.created_at)}</span>
                   <span className="h-px flex-1 bg-zinc-200" />
                 </div>
               )}
@@ -459,7 +463,7 @@ function Welcome({ channel, onPrompt }: { channel: Channel; onPrompt: (t: string
             <button
               key={e}
               onClick={() => onPrompt(e)}
-              className="block w-full cursor-pointer rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-sm text-zinc-700 shadow-card transition hover:border-brand-300 hover:text-brand-700"
+              className="block w-full cursor-pointer rounded-xl border border-zinc-200 bg-surface px-3.5 py-2.5 text-sm text-zinc-700 shadow-card transition hover:border-brand-300 hover:text-brand-700"
             >
               {e}
             </button>
@@ -562,13 +566,13 @@ function MessageRow({
   }
 
   return (
-    <div className={cn("group relative flex gap-3 px-4 transition-colors hover:bg-white", grouped ? "py-0.5" : "pt-3 pb-1", isAi && "bg-brand-50/30")}>
+    <div className={cn("group relative mx-2 flex gap-3 rounded-2xl px-3 transition-colors hover:bg-zinc-50", grouped ? "py-0.5" : "pt-3 pb-1", isAi && "bg-violet-50/40")}>
       <div className="w-9 shrink-0">{!grouped && <AuthorAvatar m={m} author={author} />}</div>
       <div className="min-w-0 flex-1">
         {!grouped && (
           <div className="flex flex-wrap items-baseline gap-x-2">
             <span className="text-sm font-semibold">{name}</span>
-            {isAi && <span className="rounded bg-brand-100 px-1 text-[10px] font-semibold text-brand-700">AI</span>}
+            {isAi && <span className="rounded-full bg-[#c9b8ff] px-1.5 text-[10px] font-semibold text-neutral-900">AI</span>}
             {m.author_kind === "external" && <span className="rounded bg-sky-50 px-1 text-[10px] font-semibold text-sky-700">гаднаас</span>}
             {m.source === "telegram" && <span className="rounded bg-sky-50 px-1 text-[10px] font-semibold text-sky-700">Telegram</span>}
             <span className="tabular text-[11px] text-zinc-400">{time(m.created_at)}</span>
@@ -610,7 +614,7 @@ function MessageRow({
       </div>
 
       {(canTask || canDelete) && !temp && (
-        <div className="absolute -top-3 right-4 hidden gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 shadow-card group-hover:flex">
+        <div className="absolute -top-3 right-4 hidden gap-0.5 rounded-full border border-line bg-surface-solid p-0.5 shadow-card group-hover:flex">
           {canTask && (
             <button onClick={() => void toTask()} disabled={busy} title="AI-аар ажил болгох" className="cursor-pointer rounded-md p-1.5 text-zinc-500 hover:bg-brand-50 hover:text-brand-700">
               {busy ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
@@ -632,9 +636,9 @@ function TaskChip({ id, fresh, onOpen }: { id: string; fresh: boolean; onOpen: (
   const t = tasks.find((x) => x.id === id);
   if (!t) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-dashed border-zinc-200 px-3 py-2 text-xs text-zinc-400">
+      <div className="flex items-center gap-2 rounded-[1.25rem] border border-dashed border-zinc-200 px-3 py-2 text-xs text-zinc-400">
         {fresh ? <Loader2 size={12} className="animate-spin" /> : null}
-        {fresh ? "Ажлыг ачаалж байна…" : "Энэ ажил устгагдсан"}
+        {fresh ? "Ажлыг ачаалж байна…" : "Танд харагдахгүй ажил (өөр хүнд оноогдсон эсвэл устгагдсан)"}
       </div>
     );
   }
@@ -643,7 +647,7 @@ function TaskChip({ id, fresh, onOpen }: { id: string; fresh: boolean; onOpen: (
   const camp = t.camp_id ? campById.get(t.camp_id) : null;
   const status = STATUSES.find((s) => s.id === t.status);
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 shadow-card">
+    <div className="raised rounded-[1.25rem] px-3.5 py-2.5">
       <div className="flex items-center gap-2">
         <PriorityChip priority={t.priority} compact />
         <button
@@ -715,7 +719,7 @@ function Proposals({ m }: { m: Message }) {
         const due = dueLabel(p.due_date || null);
         const st = p.status ?? "open";
         return (
-          <div key={i} className={cn("rounded-xl border border-dashed px-3 py-2", st === "open" ? "border-brand-300 bg-white" : "border-zinc-200 bg-zinc-50 opacity-70")}>
+          <div key={i} className={cn("rounded-xl border border-dashed px-3 py-2", st === "open" ? "border-brand-300 bg-surface" : "border-zinc-200 bg-zinc-50 opacity-70")}>
             <div className="flex items-center gap-2">
               <PriorityChip priority={p.priority} compact />
               <span className="min-w-0 flex-1 truncate text-sm font-medium">{p.title}</span>
@@ -785,7 +789,7 @@ function Composer({ channel, onSend }: { channel: Channel; onSend: (text: string
           : "AI унтраалттай";
 
   return (
-    <div className="border-t border-zinc-200/70 bg-white px-4 pt-2 pb-3">
+    <div className="border-t border-zinc-200/70 px-4 pt-2 pb-3">
       <div className="scroll-thin mb-2 flex gap-1.5 overflow-x-auto pb-0.5">
         {PROMPTS.map((p) => (
           <button
@@ -794,13 +798,13 @@ function Composer({ channel, onSend }: { channel: Channel; onSend: (text: string
               setText(p);
               ref.current?.focus();
             }}
-            className="shrink-0 cursor-pointer rounded-full border border-zinc-200 px-2.5 py-1 text-[11px] text-zinc-600 transition hover:border-brand-300 hover:text-brand-700"
+            className="shrink-0 cursor-pointer rounded-full bg-zinc-100 px-3 py-1.5 text-[11px] text-zinc-600 transition hover:bg-zinc-200 hover:text-zinc-900"
           >
             {p}
           </button>
         ))}
       </div>
-      <div className="flex items-end gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 transition focus-within:border-brand-500 focus-within:ring-3 focus-within:ring-brand-100">
+      <div className="flex items-end gap-2 rounded-[1.5rem] border border-line bg-surface-solid py-2 pr-2 pl-3 shadow-sm transition focus-within:border-brand-400 focus-within:ring-3 focus-within:ring-brand-100">
         <button
           type="button"
           title="AI-д хандах"
@@ -808,7 +812,7 @@ function Composer({ channel, onSend }: { channel: Channel; onSend: (text: string
             setText((t) => (t.startsWith("@ai") ? t : `@ai ${t}`));
             ref.current?.focus();
           }}
-          className="mb-0.5 cursor-pointer rounded-md p-1 text-zinc-400 hover:bg-brand-50 hover:text-brand-600"
+          className="mb-0.5 grid size-8 cursor-pointer place-items-center rounded-full text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900"
         >
           <AtSign size={16} />
         </button>
@@ -824,11 +828,17 @@ function Composer({ channel, onSend }: { channel: Channel; onSend: (text: string
             }
           }}
           placeholder={`#${channel.name} руу бичих…`}
-          className="max-h-[200px] min-h-[24px] flex-1 resize-none bg-transparent py-0.5 text-sm outline-none placeholder:text-zinc-400"
+          className="max-h-[200px] min-h-[24px] flex-1 resize-none self-center bg-transparent py-1 text-sm outline-none placeholder:text-zinc-400"
         />
-        <Button variant="primary" size="sm" disabled={!text.trim() || sending} onClick={() => void submit()} aria-label="Илгээх">
-          {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-        </Button>
+        <button
+          type="button"
+          disabled={!text.trim() || sending}
+          onClick={() => void submit()}
+          aria-label="Илгээх"
+          className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full bg-neutral-900 text-white transition hover:bg-neutral-700 disabled:opacity-40 dark:bg-white dark:text-neutral-900"
+        >
+          {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+        </button>
       </div>
       <div className="mt-1.5 flex items-center gap-1 text-[11px] text-zinc-400">
         <Sparkles size={11} className={channel.ai_mode === "off" ? "" : "text-brand-400"} />
@@ -913,24 +923,24 @@ function NewChannelModal({
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="label">Хэлтэс (заавал биш)</label>
-            <select className="field" value={dept} onChange={(e) => setDept(e.target.value)}>
+            <Select className="field" value={dept} onChange={(e) => setDept(e.target.value)}>
               <option value="">—</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="label">AI туслах</label>
-            <select className="field" value={mode} onChange={(e) => setMode(e.target.value as AiMode)}>
+            <Select className="field" value={mode} onChange={(e) => setMode(e.target.value as AiMode)}>
               {AI_MODES.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.label.replace("AI: ", "")}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
         <p className="text-xs text-zinc-500">{AI_MODES.find((m) => m.id === mode)?.hint}. Хэлтэс сонговол хариуцагчгүй ажил тэр хэлтэст очно.</p>
@@ -986,13 +996,13 @@ function forwardToZuca() {
       .catch(() => toast("Хуулж чадсангүй", "error"));
 
   const Code = ({ children }: { children: string }) => (
-    <div className="overflow-hidden rounded-lg bg-zinc-900">
+    <div className="overflow-hidden rounded-lg bg-neutral-900">
       <div className="flex justify-end px-2 pt-1.5">
         <button onClick={() => void copy(children)} className="cursor-pointer rounded bg-white/10 px-2 py-0.5 text-[10px] text-white hover:bg-white/20">
           Хуулах
         </button>
       </div>
-      <pre className="scroll-thin overflow-x-auto px-3 pt-1 pb-3 text-[11px] leading-relaxed text-zinc-100">{children}</pre>
+      <pre className="scroll-thin overflow-x-auto px-3 pt-1 pb-3 text-[11px] leading-relaxed text-neutral-100">{children}</pre>
     </div>
   );
 

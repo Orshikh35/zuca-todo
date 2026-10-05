@@ -106,7 +106,7 @@ export function buildDigest(snap: OrgSnapshot, person: Profile, date = todayIn()
           .map((r) => ({ who: members.find((m) => m.id === r.profile_id)!, text: r.blockers! })),
       };
     })
-    .filter((l) => l.open || l.missingReports.length || l.blockers.length);
+    .filter((l) => l.open || l.blockers.length);
 
   return {
     person,
@@ -158,15 +158,10 @@ export function digestTelegram(d: Digest, appUrl?: string) {
     });
     if (s.tasks.length > 8) L.push(`… бас ${s.tasks.length - 8}`);
   }
-  if (d.approvalsToDecide.length) {
-    L.push("", `<b>📝 Батлах хүсэлт</b> (${d.approvalsToDecide.length})`);
-    d.approvalsToDecide.slice(0, 5).forEach((a) => L.push(`• ${esc(a.title)}`));
-  }
   if (d.team.length) {
     L.push("", "<b>👥 Хэлтсийн байдал</b>");
     d.team.forEach((l) => {
       L.push(`<b>${esc(l.dept.name)}</b>: ${l.open} нээлттэй${l.overdue ? `, ⚠️ ${l.overdue} хэтэрсэн` : ""}${l.dueToday ? `, ${l.dueToday} өнөөдөр` : ""}`);
-      if (l.missingReports.length) L.push(`   Өчигдрийн тайлангүй: ${esc(l.missingReports.map((p) => p.full_name).join(", "))}`);
       l.blockers.forEach((b) => L.push(`   🚧 ${esc(b.who.full_name)}: ${esc(b.text)}`));
     });
   }
@@ -174,7 +169,6 @@ export function digestTelegram(d: Digest, appUrl?: string) {
     L.push("", "<b>⚠️ Анхаарах</b>");
     d.plan.risks.slice(0, 4).forEach((r) => L.push(`• ${esc(r)}`));
   }
-  if (!d.yesterdayReported) L.push("", "✍️ Өчигдрийн тайлангаа бөглөөгүй байна.");
   if (appUrl) L.push("", `<a href="${appUrl}/tasks?who=${d.person.id}">Системд нээх →</a>`);
   const text = L.join("\n");
   return text.length > 4000 ? text.slice(0, 3990) + "\n…" : text;
@@ -202,22 +196,17 @@ export function digestHtml(d: Digest, appUrl?: string) {
   if (!d.sections.length) body += `<p style="color:#16a34a">✅ Танд хугацаатай нээлттэй ажил алга.</p>`;
   for (const s of d.sections)
     body += block(`${s.title} (${s.tasks.length})`, `<table style="width:100%;border-collapse:collapse;font-size:14px">${s.tasks.map(row).join("")}</table>`);
-  if (d.approvalsToDecide.length)
-    body += block(`📝 Таны батлах хүсэлт (${d.approvalsToDecide.length})`, `<ul style="margin:0;padding-left:20px">${d.approvalsToDecide.map((a) => `<li>${esc(a.title)}</li>`).join("")}</ul>`);
   if (d.team.length)
     body += block(
       "👥 Хэлтсийн байдал",
       d.team
         .map(
           (l) =>
-            `<p style="margin:6px 0"><b>${esc(l.dept.name)}</b> — ${l.open} нээлттэй${l.overdue ? `, <span style="color:#dc2626">${l.overdue} хэтэрсэн</span>` : ""}${l.dueToday ? `, ${l.dueToday} өнөөдөр` : ""}${
-              l.missingReports.length ? `<br><span style="color:#71717a;font-size:12px">Өчигдрийн тайлангүй: ${esc(l.missingReports.map((p) => p.full_name).join(", "))}</span>` : ""
-            }${l.blockers.map((b) => `<br><span style="font-size:12px">🚧 ${esc(b.who.full_name)}: ${esc(b.text)}</span>`).join("")}</p>`,
+            `<p style="margin:6px 0"><b>${esc(l.dept.name)}</b> — ${l.open} нээлттэй${l.overdue ? `, <span style="color:#dc2626">${l.overdue} хэтэрсэн</span>` : ""}${l.dueToday ? `, ${l.dueToday} өнөөдөр` : ""}${l.blockers.map((b) => `<br><span style="font-size:12px">🚧 ${esc(b.who.full_name)}: ${esc(b.text)}</span>`).join("")}</p>`,
         )
         .join(""),
     );
   if (d.plan?.risks.length) body += block("⚠️ Анхаарах", `<ul style="margin:0;padding-left:20px">${d.plan.risks.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`);
-  if (!d.yesterdayReported) body += `<p style="margin-top:20px;color:#b45309">✍️ Өчигдрийн тайлангаа бөглөөгүй байна.</p>`;
 
   const cta = appUrl
     ? `<p style="margin-top:24px"><a href="${appUrl}/tasks?who=${d.person.id}" style="background:#4f46e5;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;font-size:14px">Системд нээх</a></p>`
@@ -234,9 +223,6 @@ export function planInput(snap: OrgSnapshot, person: Profile, date: string) {
   const dept = (id: string | null) => snap.departments.find((d) => d.id === id)?.name ?? null;
   const name = (id: string | null) => snap.profiles.find((p) => p.id === id)?.full_name ?? null;
   const mine = snap.tasks.filter((t) => t.status !== "done" && t.assignee_id === person.id);
-  const lastReport = snap.daily_reports
-    .filter((r) => r.profile_id === person.id && r.date < date)
-    .sort((a, b) => b.date.localeCompare(a.date))[0];
   return {
     today: date,
     weekday: prettyDate(date),
@@ -253,8 +239,6 @@ export function planInput(snap: OrgSnapshot, person: Profile, date: string) {
       tags: t.tags,
       created_by: name(t.created_by),
     })),
-    last_daily_report: lastReport ? { date: lastReport.date, done: lastReport.done, plan: lastReport.plan, blockers: lastReport.blockers } : null,
-    approvals_waiting_for_me: snap.approvals.filter((a) => a.status === "pending" && a.approver_id === person.id).map((a) => ({ title: a.title, kind: a.kind, amount: a.amount })),
     colleagues: snap.profiles
       .filter((p) => p.active && p.id !== person.id && p.department_id === person.department_id)
       .map((p) => ({ id: p.id, name: p.full_name, job_title: p.job_title, open_tasks: snap.tasks.filter((t) => t.status !== "done" && t.assignee_id === p.id).length })),

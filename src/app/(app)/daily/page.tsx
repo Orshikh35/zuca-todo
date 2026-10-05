@@ -2,7 +2,7 @@
 
 import { AlertOctagon, CheckCircle2, Clock, NotebookPen, Sparkles, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Avatar, Button, Card, Empty, PageHeader } from "@/components/ui";
+import { Avatar, Button, Card, Empty, PageHeader, Select } from "@/components/ui";
 import { useStore } from "@/lib/data/store";
 import { canManageDept, canSeeDaily, visibleDeptIds } from "@/lib/permissions";
 import type { Profile } from "@/lib/types";
@@ -56,7 +56,7 @@ export default function DailyPage() {
                   <p className="mt-0.5 text-xs text-zinc-500">Хэн тайлангаа өгсөн · нүдэн дээр дарж тухайн өдрийг харна</p>
                 </div>
                 {departments.length > 1 && (
-                  <select className="field h-8 w-auto py-0 text-xs" value={dept} onChange={(e) => setDept(e.target.value)}>
+                  <Select className="field h-8 w-auto py-0 text-xs" value={dept} onChange={(e) => setDept(e.target.value)}>
                     <option value="">Бүх хэлтэс</option>
                     {departments
                       .filter((d) => visible === null || visible.has(d.id))
@@ -65,7 +65,7 @@ export default function DailyPage() {
                           {d.name}
                         </option>
                       ))}
-                  </select>
+                  </Select>
                 )}
               </div>
               <div className="scroll-thin overflow-x-auto px-5 pb-4">

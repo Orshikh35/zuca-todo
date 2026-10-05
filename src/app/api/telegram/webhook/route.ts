@@ -2,7 +2,8 @@ import { buildDigest, digestTelegram, todayIn } from "@/lib/agent/digest";
 import { aiConfigured, organizeDay } from "@/lib/server/ai";
 import { agentForProfile } from "@/lib/server/chat";
 import { adminClient, appUrl, loadSnapshot } from "@/lib/server/context";
-import { sendTelegram } from "@/lib/server/notify";
+import { sendTelegram, telegramApi } from "@/lib/server/notify";
+import { taskButtons } from "@/lib/server/task-notify";
 import { safeEqual, verifyLinkToken } from "@/lib/server/telegram-link";
 
 export const maxDuration = 120;
@@ -10,7 +11,6 @@ export const maxDuration = 120;
 const HELP = `<b>Боломжит командууд</b>
 /today — өнөөдрийн ажил
 /plan — AI-аар өдрөө цэгцлэх
-/report <i>текст</i> — өнөөдрийн тайлан илгээх
 /id — энэ чатын ID
 
 Эсвэл энгийнээр бичээрэй — жишээ нь <i>«Батад маргааш Хөх тэнгэр зуслантай холбогдох ажил өг»</i>. AI ажлыг ZUCA Ops-д шууд бүртгэнэ.`;
@@ -25,6 +25,8 @@ interface Update {
     /** «📱 Утасны дугаараа илгээх» товчоор ирсэн */
     contact?: { phone_number: string; user_id?: number; first_name?: string };
   };
+  /** Ажлын мэдэгдэл дээрх «▶️ Эхлүүлэх / ✅ Дууссан» товч */
+  callback_query?: { id: string; from: { id: number }; data?: string; message?: { chat: { id: number }; message_id: number } };
 }
 
 /** Утсаар холбох товч — ажилтан Start дараад утсаа хуваалцахад автоматаар холбогдоно */
@@ -50,6 +52,7 @@ export async function POST(req: Request) {
     return new Response("unauthorized", { status: 401 });
   }
   const update = (await req.json().catch(() => ({}))) as Update;
+  if (update.callback_query) return handleTaskButton(update.callback_query);
   const msg = update.message;
   if (!msg) return new Response("ok");
   const chatId = String(msg.chat.id);
@@ -124,19 +127,6 @@ export async function POST(req: Request) {
       return new Response("ok");
     }
 
-    if (cmd === "/report") {
-      if (!arg) {
-        await reply("Жишээ: <code>/report Гэрээ 2-ыг байгууллаа, маркетингийн төлөвлөгөө бичлээ</code>");
-        return new Response("ok");
-      }
-      const { data: existing } = await sb.from("daily_reports").select("id, done").eq("profile_id", me.id).eq("date", date).maybeSingle();
-      const res = existing
-        ? await sb.from("daily_reports").update({ done: `${existing.done}\n${arg}` }).eq("id", existing.id)
-        : await sb.from("daily_reports").insert({ profile_id: me.id, date, done: arg });
-      await reply(res.error ? `Алдаа: ${res.error.message}` : "✍️ Өнөөдрийн тайланд нэмэгдлээ.");
-      return new Response("ok");
-    }
-
     // Команд биш энгийн текст → AI агент ажлыг бүртгэнэ / асуултад хариулна
     if (!cmd.startsWith("/") && aiConfigured()) {
       const res = await agentForProfile(sb, me, msg.text.trim(), "telegram");
@@ -202,6 +192,48 @@ async function linkByPhone(chatId: string, contact: NonNullable<NonNullable<Upda
   } catch (e) {
     console.error("linkByPhone", e);
     await send("Уучлаарай, холбоход алдаа гарлаа. Дахин оролдоно уу.");
+  }
+  return new Response("ok");
+}
+
+const STATUS_DONE_TEXT: Record<string, string> = { in_progress: "▶️ Ажлыг эхлүүллээ", done: "✅ Дууссан гэж тэмдэглэлээ" };
+
+/** Telegram дээрх товчоор ажлын төлөвийг өөрчилнө — зөвхөн хариуцагч эсвэл удирдлага */
+async function handleTaskButton(q: NonNullable<Update["callback_query"]>) {
+  const answer = (text: string) => telegramApi("answerCallbackQuery", { callback_query_id: q.id, text }).catch(() => undefined);
+  try {
+    const [kind, status, taskId] = (q.data ?? "").split(":");
+    if (kind !== "t" || !taskId || !(status === "in_progress" || status === "done")) {
+      await answer("Тодорхойгүй үйлдэл");
+      return new Response("ok");
+    }
+    const chatId = String(q.message?.chat.id ?? q.from.id);
+    const sb = adminClient();
+    const [{ data: me }, { data: task }] = await Promise.all([
+      sb.from("profiles").select("id, role").eq("telegram_chat_id", chatId).maybeSingle(),
+      sb.from("tasks").select("id, assignee_id, status").eq("id", taskId).maybeSingle(),
+    ]);
+    if (!me || !task) {
+      await answer(!me ? "Таны Telegram ZUCA Ops-тэй холбогдоогүй байна" : "Ажил олдсонгүй (устгагдсан байж магадгүй)");
+      return new Response("ok");
+    }
+    if (task.assignee_id !== me.id && !["admin", "director"].includes(me.role as string)) {
+      await answer("Энэ ажил танд оноогдоогүй байна");
+      return new Response("ok");
+    }
+    const { error } = await sb.from("tasks").update({ status }).eq("id", taskId);
+    if (error) throw new Error(error.message);
+    await answer(STATUS_DONE_TEXT[status]);
+    if (q.message) {
+      await telegramApi("editMessageReplyMarkup", {
+        chat_id: q.message.chat.id,
+        message_id: q.message.message_id,
+        reply_markup: taskButtons(taskId, status),
+      }).catch(() => undefined);
+    }
+  } catch (e) {
+    console.error("task button", e);
+    await answer("Алдаа гарлаа, дахин оролдоно уу");
   }
   return new Response("ok");
 }

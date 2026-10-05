@@ -3,7 +3,7 @@
 import { AlertCircle, CheckCircle2, ExternalLink, ListPlus, PhoneCall, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { TaskModal, type TaskDraft } from "@/components/tasks/task-modal";
-import { Avatar, Button, Drawer, PriorityChip, Progress } from "@/components/ui";
+import { Avatar, Button, Drawer, PriorityChip, Progress, Select } from "@/components/ui";
 import { AIMAGS, OWNERSHIPS, SEASONS, STAGES } from "@/lib/constants";
 import { completeness, scoreTone } from "@/lib/completeness";
 import { useStore } from "@/lib/data/store";
@@ -151,7 +151,7 @@ export function CampDrawer({ camp, open, onClose }: { camp?: Camp | null; open: 
             <>
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {missing.map((m) => (
-                  <span key={m.key} className="rounded-md bg-white px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
+                  <span key={m.key} className="rounded-md bg-surface px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
                     {m.label}
                   </span>
                 ))}
@@ -201,24 +201,24 @@ export function CampDrawer({ camp, open, onClose }: { camp?: Camp | null; open: 
           <div className="sm:col-span-2">{input("name", "Нэр *", { required: true })}</div>
           <div>
             <label className="label">Улирал</label>
-            <select className="field" value={String(f.season)} onChange={(e) => set("season", e.target.value as CampSeason)}>
+            <Select className="field" value={String(f.season)} onChange={(e) => set("season", e.target.value as CampSeason)}>
               {SEASONS.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="label">Өмчийн хэлбэр</label>
-            <select className="field" value={String(f.ownership)} onChange={(e) => set("ownership", e.target.value)}>
+            <Select className="field" value={String(f.ownership)} onChange={(e) => set("ownership", e.target.value)}>
               <option value="">— Тодорхойгүй —</option>
               {OWNERSHIPS.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           {input("register_no", "Регистрийн дугаар")}
           {input("founded_year", "Байгуулагдсан он", { type: "number", min: 1900, max: 2100 })}
@@ -228,7 +228,7 @@ export function CampDrawer({ camp, open, onClose }: { camp?: Camp | null; open: 
           </label>
           <div className="sm:col-span-2">
             <label className="label">ZUCA-гаас хариуцагч</label>
-            <select className="field" value={String(f.owner_id)} onChange={(e) => set("owner_id", e.target.value)}>
+            <Select className="field" value={String(f.owner_id)} onChange={(e) => set("owner_id", e.target.value)}>
               <option value="">— Хариуцагчгүй —</option>
               {profiles.filter((p) => p.active || p.id === camp?.owner_id).map((p) => (
                 <option key={p.id} value={p.id}>
@@ -236,7 +236,7 @@ export function CampDrawer({ camp, open, onClose }: { camp?: Camp | null; open: 
                   {p.job_title ? ` · ${p.job_title}` : ""}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div className="sm:col-span-2">
             <label className="label">Тайлбар</label>
@@ -252,12 +252,12 @@ export function CampDrawer({ camp, open, onClose }: { camp?: Camp | null; open: 
         <Section title="Байршил">
           <div>
             <label className="label">Аймаг / хот</label>
-            <select className={cn("field", missingKeys.has("aimag") && "border-amber-300 bg-amber-50/40")} value={String(f.aimag)} onChange={(e) => set("aimag", e.target.value)}>
+            <Select className={cn("field", missingKeys.has("aimag") && "border-amber-300 bg-amber-50/40")} value={String(f.aimag)} onChange={(e) => set("aimag", e.target.value)}>
               <option value="">— Сонгох —</option>
               {AIMAGS.map((a) => (
                 <option key={a}>{a}</option>
               ))}
-            </select>
+            </Select>
           </div>
           {input("soum", "Сум / дүүрэг")}
           <div className="sm:col-span-2">{input("address", "Хаяг")}</div>

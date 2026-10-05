@@ -19,6 +19,7 @@ import type {
   Task,
   TaskInput,
 } from "../types";
+import { canSeeTask, isAdmin } from "../permissions";
 import { createDemoRepo } from "./demo-repo";
 import type { Repo } from "./repo";
 import { createSupabaseRepo } from "./supabase-repo";
@@ -27,6 +28,15 @@ let repoSingleton: Repo | null = null;
 export function getRepo(): Repo {
   if (!repoSingleton) repoSingleton = isSupabaseConfigured ? createSupabaseRepo() : createDemoRepo();
   return repoSingleton;
+}
+
+/** Хариуцагчид Telegram мэдэгдэл (server талд эрх шалгана) — UI-г хүлээлгэхгүй */
+function notifyTask(taskId: string, reason: "created" | "assigned") {
+  void fetch("/api/tasks/notify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task_id: taskId, reason }),
+  }).catch(() => {});
 }
 
 export interface Toast {
@@ -189,12 +199,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const apprCrud = crud("approvals", setApprovals);
     const dailyCrud = crud("daily_reports", setDailyReports);
 
+    // Ажилтан зөвхөн өөрийн + эзэнгүй ажлыг харна (Supabase дээр RLS давхар хамгаална; demo горимд энд шүүнэ)
+    const visibleTasks = isAdmin(me) ? tasks : tasks.filter((t) => canSeeTask(me, t));
+
     return {
       mode: repo.mode,
       ready,
       me,
       profiles,
-      tasks,
+      tasks: visibleTasks,
       camps,
       departments,
       approvals,
@@ -242,12 +255,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         try {
           const t = await repo.createTask(input);
           setTasks((prev) => [...prev, t]);
+          if (repo.mode === "supabase" && t.assignee_id && t.assignee_id !== me?.id) notifyTask(t.id, "created");
           return t;
         } catch (e) {
           fail(e);
         }
       },
       async updateTask(id, patch) {
+        const before = tasks.find((t) => t.id === id);
         // Optimistic — UI шууд шинэчлэгдэнэ
         setTasks((prev) =>
           prev.map((t) => {
@@ -262,6 +277,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         try {
           const saved = await repo.updateTask(id, patch);
           setTasks((prev) => prev.map((t) => (t.id === id ? saved : t)));
+          if (repo.mode === "supabase" && patch.assignee_id && patch.assignee_id !== before?.assignee_id && patch.assignee_id !== me?.id) {
+            notifyTask(id, "assigned");
+          }
         } catch (e) {
           fail(e);
         }

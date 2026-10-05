@@ -10,7 +10,7 @@ export function Toaster() {
       {toasts.map((t) => (
         <div
           key={t.id}
-          className="animate-pop pointer-events-auto flex min-w-64 items-center gap-2.5 rounded-xl bg-zinc-900 px-3.5 py-2.5 text-sm text-white shadow-lift"
+          className="animate-pop pointer-events-auto flex min-w-64 items-center gap-2.5 rounded-xl bg-neutral-900 ring-1 ring-white/10 px-3.5 py-2.5 text-sm text-white shadow-lift"
         >
           {t.tone === "ok" ? <CheckCircle2 size={16} className="text-emerald-400" /> : <AlertCircle size={16} className="text-red-400" />}
           <span className="flex-1">{t.text}</span>

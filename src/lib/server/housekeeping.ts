@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { prettyDate, shiftDate } from "../agent/digest";
 import { completeness } from "../completeness";
 import type { Camp, Channel, Profile, Task } from "../types";
+import { notifyAssignee } from "./task-notify";
 
 /** Нэг өдөрт автоматаар үүсгэх дээд хэмжээ — самбарыг дүүргэхгүйн тулд */
 const MAX_AUTO = 10;
@@ -52,6 +53,7 @@ export async function housekeeping(sb: SupabaseClient, date: string) {
     const ins = await sb.from("tasks").insert(rows).select();
     if (ins.error) throw new Error(ins.error.message);
     created = ins.data as Task[];
+    for (const t of created) await notifyAssignee(sb, t, { actorName: "ZUCA Ops (автомат)" });
   }
 
   // 2. 3+ хоног хэтэрсэн ажлууд — багт сануулна

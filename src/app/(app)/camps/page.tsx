@@ -5,7 +5,9 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Board } from "@/components/board";
 import { CampCard } from "@/components/camps/camp-card";
 import { CampDrawer } from "@/components/camps/camp-drawer";
-import { Button, Card, PageHeader, Progress, Segmented } from "@/components/ui";
+import { ZucaSyncBar } from "@/components/camps/zuca-sync-bar";
+import { FilterBar, pillField, Tile } from "@/components/bento";
+import { Button, Card, PageHeader, Progress, Segmented, Select } from "@/components/ui";
 import { AIMAGS, OWNERSHIPS, STAGES } from "@/lib/constants";
 import { completeness, scoreTone } from "@/lib/completeness";
 import { campsToCSV, csvToCamps, download } from "@/lib/csv";
@@ -121,7 +123,7 @@ export default function CampsPage() {
     <>
       <PageHeader
         title="Зуслангууд"
-        subtitle="МҮЗХ-ны жагсаалт (2026.05.28) + zuca.mn — ZUCA-д татах явц ба мэдээллийн бүрэн байдал"
+        subtitle="zuca.mn-ээс орой бүр шинэчлэгдэнэ — ZUCA-д татах явц ба мэдээллийн бүрэн байдал"
         actions={
           <>
             <Segmented
@@ -166,35 +168,50 @@ export default function CampsPage() {
         }
       />
 
-      {/* Товч үзүүлэлт */}
-      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Нийт зуслан" value={camps.length} />
-        <Stat label="ZUCA дээр идэвхтэй" value={active} hint={`${camps.length ? Math.round((active / camps.length) * 100) : 0}% нь`} />
-        <Stat
-          label="Мэдээлэл дутуу"
+      {/* Bento товчоо */}
+      <div className="mb-5 flex flex-wrap gap-4">
+        <ZucaSyncBar className="min-w-0 flex-[2.4_1_340px]" />
+        <Tile className="flex-[1_1_150px]" tint="sky" title="Нийт зуслан" value={camps.length} caption={`${active} нь ZUCA дээр идэвхтэй`} />
+        <Tile
+          className="flex-[1_1_150px]"
+          tint="amber"
+          title="Мэдээлэл дутуу"
           value={missingCount}
-          tone="text-amber-600"
+          caption="Дарж шүүнэ"
           onClick={() => setFill(fill === "missing" ? "all" : "missing")}
           active={fill === "missing"}
-          hint="Дарж шүүх"
+          chip={missingCount ? { text: "Нөхөх", tone: "warn" } : { text: "Бүрэн", tone: "good" }}
         />
-        <Stat label="Дундаж бүрэн байдал" value={`${avg}%`} bar={avg} />
+        <Tile
+          className="flex-[1_1_150px]"
+          tint="emerald"
+          title="Бүрэн байдал"
+          value={`${avg}%`}
+          caption={`Бүрэн ${scored.filter((x) => x.complete).length} · Идэвхгүй ${camps.filter((c) => c.stage === "inactive").length}`}
+        >
+          <div className="mt-3 flex gap-1">
+            {/* 10 хэсэгт хуваасан явцын мөр */}
+            {Array.from({ length: 10 }, (_, i) => (
+              <span key={i} className={cn("h-2 flex-1 rounded-full", i < Math.round(avg / 10) ? scoreTone(avg).bar : "bg-zinc-100")} />
+            ))}
+          </div>
+        </Tile>
       </div>
 
       {/* Шүүлтүүр */}
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search size={15} className="absolute top-1/2 left-2.5 -translate-y-1/2 text-zinc-400" />
-          <input className="field h-9 w-56 pl-8" placeholder="Нэр, утас, хүн…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <FilterBar>
+        <div className="relative shrink-0">
+          <Search size={15} className="pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2 text-zinc-400" />
+          <input className={cn(pillField, "w-56 pl-9")} placeholder="Нэр, утас, хүн…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        <select className="field h-9 w-auto py-0" value={aimag} onChange={(e) => setAimag(e.target.value)}>
+        <Select className={pillField} value={aimag} onChange={(e) => setAimag(e.target.value)}>
           <option value="">Бүх аймаг</option>
           <option value="__none">— Байршилгүй —</option>
           {AIMAGS.map((a) => (
             <option key={a}>{a}</option>
           ))}
-        </select>
-        <select className="field h-9 w-auto py-0" value={own} onChange={(e) => setOwn(e.target.value as CampOwnership | "")}>
+        </Select>
+        <Select className={pillField} value={own} onChange={(e) => setOwn(e.target.value as CampOwnership | "")}>
           <option value="">Бүх өмчийн хэлбэр</option>
           {OWNERSHIPS.map((o) => (
             <option key={o.id} value={o.id}>
@@ -202,16 +219,16 @@ export default function CampsPage() {
             </option>
           ))}
           <option value="__none">— Тодорхойгүй —</option>
-        </select>
+        </Select>
         {view === "table" && (
-          <select className="field h-9 w-auto py-0" value={stage} onChange={(e) => setStage(e.target.value as CampStage | "")}>
+          <Select className={pillField} value={stage} onChange={(e) => setStage(e.target.value as CampStage | "")}>
             <option value="">Бүх төлөв</option>
             {STAGES.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.label}
               </option>
             ))}
-          </select>
+          </Select>
         )}
         <Segmented
           value={fill}
@@ -237,8 +254,8 @@ export default function CampsPage() {
             <X size={14} /> Цэвэрлэх
           </Button>
         )}
-        <span className="ml-auto text-xs text-zinc-400">{filtered.length} зуслан</span>
-      </div>
+        <span className="ml-auto shrink-0 text-xs text-zinc-400">{filtered.length} зуслан</span>
+      </FilterBar>
 
       {view === "pipeline" ? (
         <Board
@@ -348,45 +365,5 @@ export default function CampsPage() {
 
       <CampDrawer open={!!openCamp || creating} camp={creating ? null : openCamp} onClose={() => (setOpenId(null), setCreating(false))} />
     </>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  hint,
-  tone,
-  bar,
-  onClick,
-  active,
-}: {
-  label: string;
-  value: string | number;
-  hint?: string;
-  tone?: string;
-  bar?: number;
-  onClick?: () => void;
-  active?: boolean;
-}) {
-  const Tag = onClick ? "button" : "div";
-  return (
-    <Tag
-      onClick={onClick}
-      className={cn(
-        "rounded-2xl border bg-white p-4 text-left shadow-card transition",
-        onClick && "cursor-pointer hover:border-zinc-300",
-        active ? "border-amber-300 ring-4 ring-amber-100" : "border-zinc-200/70",
-      )}
-    >
-      <div className="text-xs font-medium text-zinc-500">{label}</div>
-      <div className={cn("mt-1 text-2xl font-semibold tracking-tight", tone)}>{value}</div>
-      {bar != null ? (
-        <div className="mt-2">
-          <Progress value={bar} tone={scoreTone(bar).bar} />
-        </div>
-      ) : (
-        hint && <div className="mt-0.5 text-[11px] text-zinc-400">{hint}</div>
-      )}
-    </Tag>
   );
 }

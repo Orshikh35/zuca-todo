@@ -1,18 +1,20 @@
 "use client";
 
-import { AlertTriangle, Columns3, Flame, Plus, Search, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Columns3, Flame, Inbox, Plus, Search, Timer, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CardTitle, Donut, FilterBar, Hero, HeroChip, heroBtn, Pill, pillField, Tile } from "@/components/bento";
 import { Board, type BoardColumn } from "@/components/board";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskModal, type TaskDraft } from "@/components/tasks/task-modal";
-import { Avatar, Button, PageHeader, Segmented } from "@/components/ui";
+import { Avatar, Button, PageHeader, Segmented, Select } from "@/components/ui";
 import { PRIORITIES, STATUSES } from "@/lib/constants";
 import { useStore } from "@/lib/data/store";
-import type { Task, TaskPriority, TaskStatus } from "@/lib/types";
-import { taskDeptId } from "@/lib/permissions";
+import type { Profile, Task, TaskPriority, TaskStatus } from "@/lib/types";
+import { isAdmin, taskDeptId } from "@/lib/permissions";
 import { addMonths, currentMonthKey, monthLabel } from "@/lib/plan";
-import { cn, isOverdue } from "@/lib/utils";
+import { periodStats } from "@/lib/report";
+import { cn, isOverdue, todayISO } from "@/lib/utils";
 
 type View = "status" | "priority";
 
@@ -64,6 +66,18 @@ function TasksInner() {
     if (params.get("dept")) setDept(params.get("dept")!);
   }, [params]);
 
+  // Telegram-ын «Системд нээх» → /tasks?task=<id> — ажлыг шууд нээнэ
+  const opened = useRef<string | null>(null);
+  useEffect(() => {
+    const id = params.get("task");
+    if (!id || opened.current === id) return;
+    const t = tasks.find((x) => x.id === id);
+    if (t) {
+      opened.current = id;
+      setModal({ task: t });
+    }
+  }, [params, tasks]);
+
   // "N" товч — шинэ ажил
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -109,9 +123,17 @@ function TasksInner() {
     [updateTask, view],
   );
 
+  const admin = isAdmin(me);
   const open = tasks.filter((t) => t.status !== "done");
-  const urgentCount = open.filter((t) => t.priority === "urgent").length;
-  const overdueCount = open.filter((t) => isOverdue(t.due_date, false)).length;
+  // Админ багийн бүх ажлыг, ажилтан өөрийнхийгөө тоолно
+  const scope = admin ? tasks : tasks.filter((t) => t.assignee_id === me?.id);
+  const scopeOpen = scope.filter((t) => t.status !== "done");
+  const unassigned = open.filter((t) => !t.assignee_id).length;
+  const urgentCount = scopeOpen.filter((t) => t.priority === "urgent").length;
+  const overdueCount = scopeOpen.filter((t) => isOverdue(t.due_date, false)).length;
+  const todayCount = scopeOpen.filter((t) => t.due_date === todayISO()).length;
+  const week = periodStats(scope, 7);
+  const change = week.prevDone ? Math.round(((week.doneCount - week.prevDone) / week.prevDone) * 100) : null;
   const hasFilter = q || who || prio || overdueOnly || month || dept;
   const thisMonth = currentMonthKey();
   const monthOptions = Array.from(new Set([addMonths(thisMonth, -1), thisMonth, addMonths(thisMonth, 1), addMonths(thisMonth, 2), ...tasks.map((t) => t.planned_month).filter((m): m is string => !!m)])).sort();
@@ -120,13 +142,7 @@ function TasksInner() {
     <>
       <PageHeader
         title="Ажлууд"
-        subtitle={
-          <>
-            {open.length} нээлттэй ·{" "}
-            <span className="font-medium text-red-600">{urgentCount} яаралтай</span>
-            {overdueCount > 0 && <> · <span className="font-medium text-red-600">{overdueCount} хугацаа хэтэрсэн</span></>}
-          </>
-        }
+        subtitle={admin ? "Багийн бүх ажил — чирж төлөв солино" : "Миний болон эзэнгүй ажлууд — чирж төлөв солино"}
         actions={
           <>
             <Segmented
@@ -145,22 +161,87 @@ function TasksInner() {
         }
       />
 
+      {/* Bento товчоо */}
+      <div className="mb-5 flex flex-wrap gap-4">
+        <Hero
+          tone="lavender"
+          className="min-w-0 flex-[2.4_1_340px]"
+          title={admin ? "Багийн нээлттэй ажил" : "Миний нээлттэй ажил"}
+          value={scopeOpen.length}
+          unit="ажил"
+          chips={
+            <>
+              <HeroChip active={prio === "urgent"} onClick={() => setPrio(prio === "urgent" ? null : "urgent")}>
+                🔥 Яаралтай {urgentCount}
+              </HeroChip>
+              <HeroChip active={overdueOnly} onClick={() => setOverdueOnly(!overdueOnly)}>
+                ⚠️ Хэтэрсэн {overdueCount}
+              </HeroChip>
+              <HeroChip>⏰ Өнөөдөр {todayCount}</HeroChip>
+            </>
+          }
+          actions={
+            <>
+              {me && (
+                <button onClick={() => setWho(who === me.id ? null : me.id)} className={who === me.id ? heroBtn.light : heroBtn.dark}>
+                  {who === me.id ? "Бүх ажил" : "Миний ажлууд"}
+                </button>
+              )}
+              <button onClick={() => setView(view === "status" ? "priority" : "status")} className={heroBtn.light}>
+                {view === "status" ? <Flame size={15} /> : <Columns3 size={15} />}
+                {view === "status" ? "Яаралтай байдлаар" : "Төлөвөөр"}
+              </button>
+            </>
+          }
+        />
+        <Tile
+          className="flex-[1_1_150px]"
+          tint="amber"
+          icon={<Inbox size={15} />}
+          title="Эзэнгүй ажил"
+          value={unassigned}
+          caption={admin ? "хариуцагч тавих" : "«Би авъя» гэж авна"}
+          onClick={() => setWho(who === "none" ? null : "none")}
+          active={who === "none"}
+        />
+        <Tile
+          className="flex-[1_1_150px]"
+          tint="violet"
+          icon={<Timer size={15} />}
+          title="Хийж байна"
+          value={scope.filter((t) => t.status === "in_progress").length}
+          caption={admin ? "багийн гарт" : "миний гарт"}
+        />
+        <Tile
+          className="flex-[1_1_150px]"
+          tint="emerald"
+          icon={<CheckCircle2 size={15} />}
+          title="Дууссан"
+          value={`+${week.doneCount}`}
+          caption="энэ 7 хоногт"
+          chip={change === null ? null : { text: `${change > 0 ? "+" : ""}${change}%`, tone: change >= 0 ? "good" : "bad" }}
+        />
+      </div>
+
+      {/* Админ: ажилтан бүрийн явц */}
+      {admin && <TeamProgress tasks={tasks} profiles={profiles.filter((p) => p.active)} who={who} onPick={(id) => setWho(who === id ? null : id)} />}
+
       {/* Шүүлтүүр */}
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search size={15} className="absolute top-1/2 left-2.5 -translate-y-1/2 text-zinc-400" />
-          <input className="field h-9 w-56 pl-8" placeholder="Хайх…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <FilterBar>
+        <div className="relative shrink-0">
+          <Search size={15} className="pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2 text-zinc-400" />
+          <input className={cn(pillField, "w-52 pl-9")} placeholder="Хайх…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
 
-        <div className="flex items-center rounded-lg bg-white px-1.5 py-1 ring-1 ring-zinc-200">
-          {profiles.filter((p) => p.active).map((p) => (
+        <div className="glass flex shrink-0 items-center rounded-full px-1.5 py-1">
+          {(admin ? profiles.filter((p) => p.active) : []).map((p) => (
             <button
               key={p.id}
               onClick={() => setWho(who === p.id ? null : p.id)}
               title={p.full_name}
               className={cn(
                 "cursor-pointer rounded-full p-0.5 transition",
-                who === p.id ? "ring-2 ring-brand-500" : who ? "opacity-40 hover:opacity-100" : "hover:scale-110",
+                who === p.id ? "ring-2 ring-neutral-900 dark:ring-white" : who ? "opacity-40 hover:opacity-100" : "hover:scale-110",
               )}
             >
               <Avatar profile={p} size={24} />
@@ -170,35 +251,34 @@ function TasksInner() {
             <button
               onClick={() => setWho(who === me.id ? null : me.id)}
               className={cn(
-                "ml-1 cursor-pointer rounded-md px-2 py-1 text-xs font-medium",
-                who === me.id ? "bg-brand-50 text-brand-700" : "text-zinc-500 hover:bg-zinc-100",
+                "ml-1 cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium",
+                who === me.id ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900" : "text-zinc-500 hover:bg-zinc-100",
               )}
             >
               Миний
             </button>
           )}
+          <button
+            onClick={() => setWho(who === "none" ? null : "none")}
+            className={cn(
+              "cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium",
+              who === "none" ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900" : "text-zinc-500 hover:bg-zinc-100",
+            )}
+          >
+            Эзэнгүй
+          </button>
         </div>
 
-        {view === "status" && (
-          <div className="flex items-center gap-1">
-            {PRIORITIES.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setPrio(prio === p.id ? null : p.id)}
-                className={cn(
-                  "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium ring-1 transition",
-                  prio === p.id ? cn(p.chip, "ring-2") : "bg-white text-zinc-600 ring-zinc-200 hover:bg-zinc-50",
-                )}
-              >
-                <span className={cn("size-2 rounded-full", p.dot)} />
-                {p.label}
-              </button>
-            ))}
-          </div>
-        )}
+        {view === "status" &&
+          PRIORITIES.map((p) => (
+            <Pill key={p.id} active={prio === p.id} activeClass={p.chip} onClick={() => setPrio(prio === p.id ? null : p.id)}>
+              <span className={cn("size-2 rounded-full", p.dot)} />
+              {p.label}
+            </Pill>
+          ))}
 
-        <select
-          className={cn("field h-9 w-auto py-0", month && "border-brand-300 bg-brand-50 text-brand-700")}
+        <Select
+          className={cn(pillField, month && "border-brand-300 bg-brand-50 text-brand-700")}
           value={month}
           onChange={(e) => setMonth(e.target.value)}
           title="Төлөвлөсөн сараар шүүх"
@@ -211,11 +291,11 @@ function TasksInner() {
             </option>
           ))}
           <option value="none">Төлөвлөөгүй · {tasks.filter((t) => !t.planned_month && t.status !== "done").length}</option>
-        </select>
+        </Select>
 
         {departments.length > 0 && (
-          <select
-            className={cn("field h-9 w-auto py-0", dept && "border-brand-300 bg-brand-50 text-brand-700")}
+          <Select
+            className={cn(pillField, dept && "border-brand-300 bg-brand-50 text-brand-700")}
             value={dept}
             onChange={(e) => setDept(e.target.value)}
             title="Хэлтсээр шүүх"
@@ -227,18 +307,12 @@ function TasksInner() {
               </option>
             ))}
             <option value="cross">↔ Хэлтэс хоорондын хүсэлт</option>
-          </select>
+          </Select>
         )}
 
-        <button
-          onClick={() => setOverdueOnly(!overdueOnly)}
-          className={cn(
-            "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium ring-1 transition",
-            overdueOnly ? "bg-red-50 text-red-700 ring-red-300" : "bg-white text-zinc-600 ring-zinc-200 hover:bg-zinc-50",
-          )}
-        >
+        <Pill active={overdueOnly} activeClass="bg-red-50 text-red-700 ring-2 ring-red-300" onClick={() => setOverdueOnly(!overdueOnly)}>
           <AlertTriangle size={13} /> Хугацаа хэтэрсэн
-        </button>
+        </Pill>
 
         {hasFilter && (
           <Button
@@ -256,7 +330,7 @@ function TasksInner() {
             <X size={14} /> Цэвэрлэх
           </Button>
         )}
-      </div>
+      </FilterBar>
 
       <Board
         columns={columns}
@@ -295,7 +369,7 @@ function QuickAdd({ onAdd }: { onAdd: (title: string) => void }) {
     return (
       <button
         onClick={() => setOn(true)}
-        className="flex w-full cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-zinc-500 transition hover:bg-white hover:text-zinc-800"
+        className="flex w-full cursor-pointer items-center gap-1.5 rounded-full px-3 py-2 text-sm text-zinc-500 transition hover:bg-surface-solid hover:text-zinc-800"
       >
         <Plus size={15} /> Нэмэх
       </button>
@@ -311,7 +385,7 @@ function QuickAdd({ onAdd }: { onAdd: (title: string) => void }) {
     >
       <input
         autoFocus
-        className="field"
+        className="field rounded-[1.25rem]"
         placeholder="Гарчиг бичээд Enter…"
         value={v}
         onChange={(e) => setV(e.target.value)}
@@ -319,5 +393,74 @@ function QuickAdd({ onAdd }: { onAdd: (title: string) => void }) {
         onKeyDown={(e) => e.key === "Escape" && (setV(""), setOn(false))}
       />
     </form>
+  );
+}
+
+/* ─────────── Админ: ажилтан бүрийн гүйцэтгэл (сүүлийн 30 хоног) ─────────── */
+function TeamProgress({ tasks, profiles, who, onPick }: { tasks: Task[]; profiles: Profile[]; who: string | null; onPick: (id: string) => void }) {
+  const since = Date.now() - 30 * 86_400_000;
+  const rows = profiles
+    .map((p) => {
+      const mine = tasks.filter((t) => t.assignee_id === p.id);
+      const openT = mine.filter((t) => t.status !== "done");
+      const done = mine.filter((t) => t.status === "done" && t.completed_at && Date.parse(t.completed_at) >= since).length;
+      const total = openT.length + done;
+      return {
+        p,
+        open: openT.length,
+        doing: openT.filter((t) => t.status === "in_progress" || t.status === "review").length,
+        overdue: openT.filter((t) => isOverdue(t.due_date, false)).length,
+        done,
+        total,
+        pct: total ? Math.round((done / total) * 100) : null,
+      };
+    })
+    .sort((a, b) => (b.total ? 1 : 0) - (a.total ? 1 : 0) || (a.pct ?? 101) - (b.pct ?? 101));
+  const all = rows.reduce((a, r) => ({ done: a.done + r.done, total: a.total + r.total }), { done: 0, total: 0 });
+  const teamPct = all.total ? Math.round((all.done / all.total) * 100) : 0;
+
+  return (
+    <section className="glass mb-5 rounded-[1.75rem] p-5 sm:p-6">
+      <CardTitle title="Ажилчдын явц" count={rows.length} sub={`Сүүлийн 30 хоног · баг нийт ${teamPct}% (${all.done}/${all.total})`} pill="Дарж шүүнэ" />
+      <div className="scroll-thin -mx-1 mt-4 flex gap-3 overflow-x-auto px-1 pb-1">
+        {rows.map((r) => {
+          const color = r.pct === null ? "#d4d4d8" : r.pct >= 70 ? "#8fd16a" : r.pct >= 40 ? "#ffb34d" : "#ff6b8b";
+          return (
+            <button
+              key={r.p.id}
+              onClick={() => onPick(r.p.id)}
+              className={cn(
+                "raised flex w-[15.5rem] shrink-0 cursor-pointer items-center gap-3 rounded-[1.25rem] p-3 text-left transition hover:-translate-y-0.5",
+                who === r.p.id && "ring-2 ring-neutral-900 dark:ring-white",
+              )}
+            >
+              <Donut
+                size={64}
+                stroke={7}
+                parts={[
+                  { label: "done", value: r.done, color },
+                  { label: "open", value: r.open, color: "transparent" },
+                ]}
+                center={<span className="tabular text-[13px] font-semibold">{r.pct === null ? "—" : `${r.pct}%`}</span>}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5">
+                  <Avatar profile={r.p} size={18} />
+                  <span className="truncate text-sm font-medium">{r.p.full_name}</span>
+                </span>
+                <span className="mt-0.5 block truncate text-[11px] text-zinc-500">{r.p.job_title || "Ажилтан"}</span>
+                <span className="mt-1.5 flex flex-wrap gap-1 text-[10.5px] font-medium">
+                  <span className="rounded-full bg-surface-solid px-1.5 py-0.5">
+                    {r.done}/{r.total} дууссан
+                  </span>
+                  {r.doing > 0 && <span className="rounded-full bg-[#c9b8ff] px-1.5 py-0.5 text-neutral-900">{r.doing} хийж буй</span>}
+                  {r.overdue > 0 && <span className="rounded-full bg-[#ff7b8f] px-1.5 py-0.5 text-neutral-900">{r.overdue} хэтэрсэн</span>}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }

@@ -2,7 +2,7 @@
 
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
-import { Button, Modal } from "@/components/ui";
+import { Button, Modal, Select } from "@/components/ui";
 import { DEPARTMENT_COLORS } from "@/lib/constants";
 import { useStore } from "@/lib/data/store";
 import type { Department } from "@/lib/types";
@@ -97,7 +97,7 @@ export function DepartmentModal({ dept, onClose }: { dept: Department | null; on
         <div className="grid gap-3.5 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="d-head">Хэлтсийн дарга</label>
-            <select id="d-head" className="field" value={f.head_id} onChange={(e) => set("head_id", e.target.value)}>
+            <Select id="d-head" className="field" value={f.head_id} onChange={(e) => set("head_id", e.target.value)}>
               <option value="">— Томилоогүй —</option>
               {profiles
                 .filter((p) => p.active)
@@ -107,11 +107,11 @@ export function DepartmentModal({ dept, onClose }: { dept: Department | null; on
                     {p.job_title ? ` · ${p.job_title}` : ""}
                   </option>
                 ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="label" htmlFor="d-parent">Харьяалагдах</label>
-            <select id="d-parent" className="field" value={f.parent_id} onChange={(e) => set("parent_id", e.target.value)}>
+            <Select id="d-parent" className="field" value={f.parent_id} onChange={(e) => set("parent_id", e.target.value)}>
               <option value="">— Дээд түвшин —</option>
               {departments
                 .filter((d) => !descendants.has(d.id))
@@ -120,7 +120,7 @@ export function DepartmentModal({ dept, onClose }: { dept: Department | null; on
                     {d.name}
                   </option>
                 ))}
-            </select>
+            </Select>
           </div>
         </div>
         <div>

@@ -71,11 +71,12 @@ export const AIMAGS = [
   "Хэнтий",
 ];
 
-export const ROLES: { id: Role; label: string; hint: string; chip: string }[] = [
-  { id: "admin", label: "Систем админ", hint: "Бүх тохиргоо, эрх олгох", chip: "bg-zinc-900 text-white ring-zinc-900" },
-  { id: "director", label: "Удирдлага", hint: "Бүх хэлтсийг харж, хүсэлт батална", chip: "bg-violet-50 text-violet-700 ring-violet-200" },
-  { id: "manager", label: "Хэлтсийн дарга", hint: "Өөрийн хэлтсийн ажил, тайлан, хүсэлт", chip: "bg-sky-50 text-sky-700 ring-sky-200" },
-  { id: "member", label: "Ажилтан", hint: "Өөрийн ажил, тайлан", chip: "bg-zinc-100 text-zinc-600 ring-zinc-200" },
+/** ZUCA-д сонгох эрх хоёр: Админ, Ажилтан. director/manager — хуучин өгөгдөлд таарах (сонгох боломжгүй) */
+export const ROLES: { id: Role; label: string; hint: string; chip: string; selectable: boolean }[] = [
+  { id: "admin", label: "Админ", hint: "Бүх ажилтны ажил, явц, тохиргоог харна", chip: "bg-neutral-900 text-white ring-neutral-900 dark:bg-white dark:text-neutral-900 dark:ring-white", selectable: true },
+  { id: "member", label: "Ажилтан", hint: "Өөрийн болон эзэнгүй ажлаа харна", chip: "bg-zinc-100 text-zinc-600 ring-zinc-200", selectable: true },
+  { id: "director", label: "Админ", hint: "Хуучин «Удирдлага» — админтай адил", chip: "bg-violet-50 text-violet-700 ring-violet-200", selectable: false },
+  { id: "manager", label: "Хэлтсийн дарга", hint: "Хуучин эрх — Админ эсвэл Ажилтан болгоно уу", chip: "bg-sky-50 text-sky-700 ring-sky-200", selectable: false },
 ];
 
 export const APPROVAL_KINDS: { id: ApprovalKind; label: string; hint: string; money?: boolean; dates?: boolean }[] = [

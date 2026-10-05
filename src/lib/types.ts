@@ -94,9 +94,31 @@ export interface Camp {
   /** Зуслан хариуцагч ажилтан */
   owner_id: string | null;
   last_contacted_at: string | null;
+  /** zuca.mn-ээс орой бүр шинэчлэгдэнэ (v6) */
+  zuca_id?: number | null;
+  zuca_slug?: string | null;
+  zuca_rating?: number | null;
+  zuca_reviews?: number | null;
+  zuca_shifts_open?: number | null;
+  zuca_synced_at?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** zuca.mn дээрх ээлж (синкээр шинэчлэгдэнэ) */
+export interface ZucaShift {
+  id: number;
+  camp_id: string;
+  name: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  capacity: number;
+  booked: number;
+  price: number | null;
+  is_open: boolean;
+  is_day: boolean;
+  synced_at: string;
 }
 
 /** Хэлтэс / нэгж. parent_id-аар шатлал үүсгэнэ */

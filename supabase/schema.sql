@@ -614,3 +614,86 @@ do $$ begin
      where not exists (select 1 from public.channels c where c.slug = coalesce(lower(d.code), left(d.id::text, 8)));
   end if;
 end $$;
+
+-- ═════════════════════════ v6: Зөвхөн ZUCA — ажлыг хариуцагчид нь, zuca.mn синк ═════════════════════════
+
+-- ── Ажлыг хэн харах вэ ──
+-- Админ: бүгдийг · Ажилтан: өөрт оноогдсон, өөрийн үүсгэсэн, эзэнгүй ажил.
+-- (Cron, Telegram bot, intake нь service role-оор ажиллах тул эдгээр дүрэм тэдэнд хамаарахгүй.)
+drop policy if exists "tasks all"    on public.tasks;
+drop policy if exists "tasks select" on public.tasks;
+drop policy if exists "tasks insert" on public.tasks;
+drop policy if exists "tasks update" on public.tasks;
+drop policy if exists "tasks delete" on public.tasks;
+-- Хоёр эрх: Админ (admin/director) бүгдийг; Ажилтан — өөрт оноогдсон, өөрийн үүсгэсэн, эзэнгүй ажил
+create policy "tasks select" on public.tasks for select to authenticated using (
+  public.is_leader()
+  or assignee_id = public.my_profile_id()
+  or created_by = public.my_profile_id()
+  or assignee_id is null
+);
+create policy "tasks insert" on public.tasks for insert to authenticated with check (true);
+create policy "tasks update" on public.tasks for update to authenticated using (
+  public.is_leader()
+  or assignee_id = public.my_profile_id()
+  or created_by = public.my_profile_id()
+  or assignee_id is null                                   -- эзэнгүй ажлыг «Би авъя» гэж авах
+) with check (
+  public.is_leader()
+  or assignee_id = public.my_profile_id()
+  or created_by = public.my_profile_id()
+  or assignee_id is null
+);
+create policy "tasks delete" on public.tasks for delete to authenticated using (
+  public.is_leader() or created_by = public.my_profile_id()
+);
+
+-- Эрхийг хоёр болгоно: «Удирдлага» → Админ, «Хэлтсийн дарга» → Ажилтан.
+-- (Хэрэгтэй хүнийг дараа нь «Баг» хуудаснаас Админ болгоно. Хэлтэс, дарга AI-д хэрэглэгдсээр байна.)
+update public.profiles set role = 'admin'  where role = 'director';
+update public.profiles set role = 'member' where role = 'manager';
+
+-- ── zuca.mn-ээс орой бүр татах мэдээлэл ──
+alter table public.camps add column if not exists zuca_rating      numeric(3, 1);
+alter table public.camps add column if not exists zuca_reviews     int;
+alter table public.camps add column if not exists zuca_shifts_open int;
+alter table public.camps add column if not exists zuca_synced_at   timestamptz;
+create index if not exists camps_zuca_id_idx on public.camps (zuca_id);
+
+create table if not exists public.zuca_shifts (
+  id         bigint primary key,                                    -- zuca.mn-ийн ээлжийн id
+  camp_id    uuid not null references public.camps (id) on delete cascade,
+  name       text not null default '',
+  starts_at  timestamptz,
+  ends_at    timestamptz,
+  capacity   int not null default 0,
+  booked     int not null default 0,
+  price      int,
+  is_open    boolean not null default true,
+  is_day     boolean not null default false,
+  synced_at  timestamptz not null default now()
+);
+create index if not exists zuca_shifts_start_idx on public.zuca_shifts (starts_at);
+create index if not exists zuca_shifts_camp_idx on public.zuca_shifts (camp_id);
+
+-- Системийн жижиг тохиргоо/төлөв (жишээ нь сүүлийн синк)
+create table if not exists public.app_meta (
+  key         text primary key,
+  value       jsonb not null default '{}',
+  updated_at  timestamptz not null default now()
+);
+
+alter table public.zuca_shifts enable row level security;
+alter table public.app_meta    enable row level security;
+drop policy if exists "zuca_shifts select" on public.zuca_shifts;
+drop policy if exists "app_meta select"    on public.app_meta;
+create policy "zuca_shifts select" on public.zuca_shifts for select to authenticated using (true);
+create policy "app_meta select"    on public.app_meta    for select to authenticated using (true);
+-- Supabase ихэвчлэн автоматаар олгодог ч, тодорхой байлгая (синк service_role-оор бичнэ)
+grant select on public.zuca_shifts, public.app_meta to authenticated;
+grant all    on public.zuca_shifts, public.app_meta to service_role;
+-- Бичих эрх зөвхөн service role-д (синк, cron)
+
+do $$ begin
+  alter publication supabase_realtime add table public.zuca_shifts;
+exception when others then null; end $$;

@@ -106,7 +106,7 @@ export function ColumnChart({
                   ))}
                 </div>
                 {hover === i && (
-                  <div className="pointer-events-none absolute bottom-full z-10 mb-1 min-w-32 rounded-lg bg-zinc-900 px-2.5 py-2 text-xs whitespace-nowrap text-white shadow-lift">
+                  <div className="pointer-events-none absolute bottom-full z-10 mb-1 min-w-32 rounded-lg bg-neutral-900 ring-1 ring-white/10 px-2.5 py-2 text-xs whitespace-nowrap text-white shadow-lift">
                     <div className="mb-1 font-medium text-zinc-300">{b.full}</div>
                     {series.map((s, si) => (
                       <div key={s.name} className="flex items-center gap-1.5">

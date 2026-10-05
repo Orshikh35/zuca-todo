@@ -153,7 +153,7 @@ export function Board<T extends { id: string; position: number }>({
       onDragEnd={onDragEnd}
       onDragCancel={reset}
     >
-      <div className="scroll-thin -mx-4 flex gap-4 overflow-x-auto px-4 pb-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+      <div className="scroll-thin -mx-3 flex gap-4 overflow-x-auto px-3 pb-4 sm:-mx-6 sm:px-6 lg:-mx-1 lg:px-1">
         {columns.map((col) => (
           <Column
             key={col.id}
@@ -177,7 +177,7 @@ export function Board<T extends { id: string; position: number }>({
       </div>
 
       <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }}>
-        {active ? <div className="rotate-[1.5deg] cursor-grabbing rounded-xl shadow-lift">{renderCard(active, { overlay: true })}</div> : null}
+        {active ? <div className="rotate-[1.5deg] cursor-grabbing rounded-[1.25rem] shadow-lift">{renderCard(active, { overlay: true })}</div> : null}
       </DragOverlay>
     </DndContext>
   );
@@ -207,34 +207,34 @@ function Column({
       ref={setNodeRef}
       data-col={col.id}
       className={cn(
-        "flex shrink-0 flex-col rounded-2xl border transition-colors duration-150",
+        "flex shrink-0 flex-col rounded-[1.75rem] transition-colors duration-150",
         width,
-        highlight ? "border-brand-300 bg-brand-50/70 ring-4 ring-brand-100/70" : "border-transparent bg-zinc-200/40",
+        highlight ? "lane ring-2 ring-brand-300" : "lane",
       )}
     >
-      <header className="flex items-center gap-2 px-3.5 pt-3 pb-2">
+      <header className="flex items-center gap-2 px-4 pt-4 pb-2">
         <span className={cn("size-2.5 rounded-full", col.dot)} />
-        <h3 className="text-sm font-semibold text-zinc-800">{col.label}</h3>
-        <span className="tabular rounded-full bg-white px-1.5 text-xs font-medium text-zinc-500 ring-1 ring-zinc-200">{ids.length}</span>
+        <h3 className="text-[15px] font-medium text-zinc-900">{col.label}</h3>
+        <sup className="tabular text-xs font-medium text-zinc-500">{ids.length}</sup>
         <div className="ml-auto">{meta}</div>
       </header>
-      {col.hint && <p className="-mt-1 px-3.5 pb-2 text-[11px] text-zinc-400">{col.hint}</p>}
-      <div className="flex min-h-24 flex-1 flex-col gap-2 px-2 pb-2">
+      {col.hint && <p className="-mt-1 px-4 pb-2 text-[11px] text-zinc-400">{col.hint}</p>}
+      <div className="flex min-h-24 flex-1 flex-col gap-2 px-2.5 pb-2.5">
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {children}
         </SortableContext>
         {ids.length === 0 && (
           <div
             className={cn(
-              "flex h-20 items-center justify-center rounded-xl border-2 border-dashed text-xs transition",
-              highlight ? "border-brand-300 text-brand-600" : "border-zinc-300/70 text-zinc-400",
+              "flex h-20 items-center justify-center rounded-[1.25rem] border-2 border-dashed text-xs transition",
+              highlight ? "border-brand-300 text-brand-600" : "border-zinc-200 text-zinc-400",
             )}
           >
             Энд чирж оруулна уу
           </div>
         )}
       </div>
-      {footer && <div className="px-2 pb-2">{footer}</div>}
+      {footer && <div className="px-2.5 pb-2.5">{footer}</div>}
     </section>
   );
 }

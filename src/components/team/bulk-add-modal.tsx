@@ -2,7 +2,7 @@
 
 import { FileUp, Loader2, Users } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { Button, Modal } from "@/components/ui";
+import { Button, Modal, Select } from "@/components/ui";
 import { ROLES } from "@/lib/constants";
 import { parseCSV } from "@/lib/csv";
 import { getRepo, useStore } from "@/lib/data/store";
@@ -85,7 +85,7 @@ export function BulkAddModal({ open, onClose }: { open: boolean; onClose: () => 
   }, [text, profiles, departments]);
 
   const toAdd = rows.filter((r) => r.status === "new");
-  const roleOptions = ROLES.filter((r) => r.id === "member" || canSetRole(me, r.id));
+  const roleOptions = ROLES.filter((r) => r.selectable && (r.id === "member" || canSetRole(me, r.id)));
 
   function close() {
     if (saving) return;
@@ -189,26 +189,26 @@ export function BulkAddModal({ open, onClose }: { open: boolean; onClose: () => 
             <label className="label" htmlFor="bulk-dept">
               Хэлтэс заагаагүй бол
             </label>
-            <select id="bulk-dept" className="field" value={defaultDept} onChange={(e) => setDefaultDept(e.target.value)}>
+            <Select id="bulk-dept" className="field" value={defaultDept} onChange={(e) => setDefaultDept(e.target.value)}>
               <option value="">— Хэлтэсгүй</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="label" htmlFor="bulk-role">
               Эрхийн түвшин (бүгдэд)
             </label>
-            <select id="bulk-role" className="field" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+            <Select id="bulk-role" className="field" value={role} onChange={(e) => setRole(e.target.value as Role)}>
               {roleOptions.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 
