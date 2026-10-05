@@ -18,8 +18,30 @@ const HELP = `<b>Боломжит командууд</b>
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 interface Update {
-  message?: { chat: { id: number }; text?: string; from?: { first_name?: string } };
+  message?: {
+    chat: { id: number; type?: string };
+    text?: string;
+    from?: { id?: number; first_name?: string };
+    /** «📱 Утасны дугаараа илгээх» товчоор ирсэн */
+    contact?: { phone_number: string; user_id?: number; first_name?: string };
+  };
 }
+
+/** Утсаар холбох товч — ажилтан Start дараад утсаа хуваалцахад автоматаар холбогдоно */
+const ASK_PHONE = {
+  reply_markup: {
+    keyboard: [[{ text: "📱 Утасны дугаараа илгээх", request_contact: true }]],
+    resize_keyboard: true,
+    one_time_keyboard: true,
+  },
+};
+const REMOVE_KEYBOARD = { reply_markup: { remove_keyboard: true } };
+
+/** Утасны дугаарыг харьцуулах түлхүүр: зөвхөн цифр, сүүлийн 8 (+976 9911 2233 = 99112233) */
+const phoneKey = (s: string | null | undefined) => {
+  const d = (s ?? "").replace(/\D/g, "");
+  return d.length >= 8 ? d.slice(-8) : d;
+};
 
 /** Telegram bot webhook. /api/telegram/setup-оор бүртгэнэ. */
 export async function POST(req: Request) {
@@ -29,9 +51,13 @@ export async function POST(req: Request) {
   }
   const update = (await req.json().catch(() => ({}))) as Update;
   const msg = update.message;
-  if (!msg?.text) return new Response("ok");
-
+  if (!msg) return new Response("ok");
   const chatId = String(msg.chat.id);
+  const isPrivate = !msg.chat.type || msg.chat.type === "private";
+
+  if (msg.contact && isPrivate) return linkByPhone(chatId, msg.contact, msg.from?.id);
+  if (!msg.text) return new Response("ok");
+
   const [cmdRaw, ...rest] = msg.text.trim().split(/\s+/);
   const cmd = cmdRaw.split("@")[0].toLowerCase();
   const arg = rest.join(" ");
@@ -59,14 +85,26 @@ export async function POST(req: Request) {
       return new Response("ok");
     }
 
-    if (cmd === "/id" || cmd === "/start") {
-      await reply(`Энэ чатын ID: <code>${chatId}</code>\n\nСистемийн «AI туслах» хэсгээс «Telegram холбох» товч дарж холбоно уу.\n\n${HELP}`);
+    if (cmd === "/id") {
+      await reply(`Энэ чатын ID: <code>${chatId}</code>`);
       return new Response("ok");
     }
 
     const { data: me } = await sb.from("profiles").select("*").eq("telegram_chat_id", chatId).maybeSingle();
     if (!me) {
-      await reply(`Энэ чат ямар ч ажилтантай холбогдоогүй байна. Чатын ID: <code>${chatId}</code>`);
+      // Холбогдоогүй бол утсаар нь таньж холбоно
+      await sendTelegram(
+        chatId,
+        isPrivate
+          ? "👋 Сайн байна уу! ZUCA Ops-тэй холбогдохын тулд доорх <b>«📱 Утасны дугаараа илгээх»</b> товчийг дарна уу. Таны утас «Ажилчид» хэсэгт бүртгэлтэй байх ёстой."
+          : `Энэ групп ZUCA Ops-тэй холбогдоогүй байна. Чатын ID: <code>${chatId}</code>`,
+        isPrivate ? ASK_PHONE : {},
+      ).catch((e) => console.error("telegram reply", e));
+      return new Response("ok");
+    }
+
+    if (cmd === "/start") {
+      await reply(`👋 ${esc(me.full_name)}, та ZUCA Ops-тэй холбогдсон байна.\n\n${HELP}`);
       return new Response("ok");
     }
     const date = todayIn();
@@ -121,6 +159,49 @@ export async function POST(req: Request) {
   } catch (e) {
     console.error("telegram webhook", e);
     await reply("Уучлаарай, алдаа гарлаа. Дахин оролдоно уу.");
+  }
+  return new Response("ok");
+}
+
+/**
+ * Ажилтан утсаа хуваалцахад «Ажилчид» хэсэгт бүртгэлтэй утсаар нь таньж Telegram-ыг холбоно.
+ * Олон ажилтан bot-ын холбоос (t.me/<bot>) аваад Start → утас илгээх л хангалттай.
+ */
+async function linkByPhone(chatId: string, contact: NonNullable<NonNullable<Update["message"]>["contact"]>, fromId?: number) {
+  const send = (text: string, extra: Record<string, unknown> = {}) =>
+    sendTelegram(chatId, text, extra).catch((e) => console.error("telegram reply", e));
+  try {
+    // Өөр хүний контактыг илгээж бусдын бүртгэлд холбогдохоос сэргийлнэ
+    if (contact.user_id && fromId && contact.user_id !== fromId) {
+      await send("Өөрийн утасны дугаарыг доорх товчоор илгээнэ үү.", ASK_PHONE);
+      return new Response("ok");
+    }
+    const key = phoneKey(contact.phone_number);
+    const sb = adminClient();
+    const { data } = await sb.from("profiles").select("id, full_name, phone, active").not("phone", "is", null);
+    const matches = ((data ?? []) as { id: string; full_name: string; phone: string | null; active: boolean }[]).filter(
+      (p) => p.active && key.length >= 6 && phoneKey(p.phone) === key,
+    );
+
+    if (matches.length !== 1) {
+      await send(
+        matches.length
+          ? `Энэ утас (${key}) хэд хэдэн ажилтанд бүртгэлтэй байна. Админдаа хэлж нэгийг нь засуулна уу.`
+          : `Таны утас (${key}) ZUCA Ops-ийн «Ажилчид» хэсэгт бүртгэлгүй байна. Менежертээ утсаа бүртгүүлээд дахин товчийг дарна уу.`,
+        ASK_PHONE,
+      );
+      return new Response("ok");
+    }
+
+    const person = matches[0];
+    // Өмнө нь энэ чатыг өөр хүнд холбосон бол салгана
+    await sb.from("profiles").update({ telegram_chat_id: null }).eq("telegram_chat_id", chatId).neq("id", person.id);
+    const { error } = await sb.from("profiles").update({ telegram_chat_id: chatId, notify_telegram: true }).eq("id", person.id);
+    if (error) throw new Error(error.message);
+    await send(`✅ ${esc(person.full_name)}, Telegram амжилттай холбогдлоо. Өглөө бүр өнөөдрийн ажлаа эндээс авна.\n\n${HELP}`, REMOVE_KEYBOARD);
+  } catch (e) {
+    console.error("linkByPhone", e);
+    await send("Уучлаарай, холбоход алдаа гарлаа. Дахин оролдоно уу.");
   }
   return new Response("ok");
 }

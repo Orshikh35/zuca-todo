@@ -3,6 +3,7 @@
 import { AlertTriangle, CheckCircle2, Crown, KeyRound, Mail, Phone, Plus, Search, Send, Tent, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { BulkAddModal } from "@/components/team/bulk-add-modal";
 import { MemberModal } from "@/components/team/member-modal";
 import { Avatar, Button, Card, Empty, PageHeader, Progress } from "@/components/ui";
 import { useStore } from "@/lib/data/store";
@@ -17,6 +18,7 @@ export default function TeamPage() {
   const [dept, setDept] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [modal, setModal] = useState<{ member: Profile | null } | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   /** Ажилтан бүрийн ачаалал */
   const rows = useMemo(() => {
@@ -67,9 +69,14 @@ export default function TeamPage() {
               </select>
             )}
             {atLeast(me, "manager") && (
-              <Button variant="primary" onClick={() => setModal({ member: null })}>
-                <Plus size={16} /> Ажилтан нэмэх
-              </Button>
+              <>
+                <Button onClick={() => setBulkOpen(true)}>
+                  <Users size={16} /> Олноор нэмэх
+                </Button>
+                <Button variant="primary" onClick={() => setModal({ member: null })}>
+                  <Plus size={16} /> Ажилтан нэмэх
+                </Button>
+              </>
             )}
           </>
         }
@@ -216,6 +223,7 @@ export default function TeamPage() {
       </div>
 
       {modal && <MemberModal member={modal.member} onClose={() => setModal(null)} />}
+      <BulkAddModal open={bulkOpen} onClose={() => setBulkOpen(false)} />
     </>
   );
 }

@@ -21,7 +21,7 @@ import { agentFetch, type AgentStatus } from "@/lib/agent/client";
 import { buildDigest, digestHtml, digestTelegram, type OrgSnapshot } from "@/lib/agent/digest";
 import type { AgentPlan } from "@/lib/agent/schema";
 import { useStore } from "@/lib/data/store";
-import { canManageOrg, canNotify } from "@/lib/permissions";
+import { atLeast, canManageOrg, canNotify } from "@/lib/permissions";
 import type { Task } from "@/lib/types";
 import { cn, relativeTime, todayISO } from "@/lib/utils";
 
@@ -409,6 +409,27 @@ function MyChannels({ status, ctx, onToggle }: { status: AgentStatus | null; ctx
         <p className="border-t border-zinc-100 px-5 py-3 text-xs text-zinc-500">
           Demo горимд bot-оор холбох боломжгүй (өгөгдөл browser-т). Telegram-д bot-оо эхлүүлээд <code>/id</code> гэж бичиж авсан chat ID-гаа «Ажилчид» → засах хэсэгт оруулна.
         </p>
+      )}
+      {atLeast(me, "manager") && status?.bot && ctx.mode === "supabase" && (
+        <div className="border-t border-zinc-100 px-5 py-3 text-xs text-zinc-500">
+          <div className="mb-1.5 font-medium text-zinc-700">Багийнхнаа олноор холбох</div>
+          Энэ холбоосыг багийн группт илгээнэ. Ажилтан бүр <b>Start</b> → <b>«📱 Утасны дугаараа илгээх»</b> дарахад «Ажилчид» хэсэгт
+          бүртгэлтэй утсаар нь таньж автоматаар холбогдоно.
+          <div className="mt-2 flex items-center gap-2">
+            <code className="flex-1 truncate rounded-md bg-zinc-100 px-2 py-1.5 text-zinc-800">https://t.me/{status.bot.replace(/^@/, "")}</code>
+            <Button
+              size="sm"
+              onClick={() =>
+                void navigator.clipboard
+                  .writeText(`https://t.me/${status.bot!.replace(/^@/, "")}`)
+                  .then(() => toast("Холбоос хууллаа"))
+                  .catch(() => toast("Хуулж чадсангүй", "error"))
+              }
+            >
+              Хуулах
+            </Button>
+          </div>
+        </div>
       )}
       {me.role === "admin" && status?.telegram && ctx.mode === "supabase" && (
         <div className="flex items-center justify-between gap-3 border-t border-zinc-100 px-5 py-3 text-xs text-zinc-500">

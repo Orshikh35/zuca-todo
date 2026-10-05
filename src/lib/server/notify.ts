@@ -23,12 +23,12 @@ export async function sendEmail(to: string, subject: string, html: string, text:
   await mailer().sendMail({ from, to, subject, html, text });
 }
 
-export async function sendTelegram(chatId: string, text: string) {
+export async function sendTelegram(chatId: string, text: string, extra: Record<string, unknown> = {}) {
   if (!telegramConfigured()) throw new Error("TELEGRAM_BOT_TOKEN тохируулаагүй");
   const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, ...extra }),
   });
   const json = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
   if (!res.ok || !json.ok) throw new Error(`Telegram: ${json.description ?? res.statusText}`);
