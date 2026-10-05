@@ -21,9 +21,11 @@ export const maxDuration = 120;
  */
 export async function POST(req: Request) {
   try {
-    const secret = process.env.INTAKE_SECRET;
+    // Хуулахад орж ирсэн хоосон зай, хашилтыг тэвчинэ
+    const clean = (v: string | null | undefined) => (v ?? "").trim().replace(/^["']|["']$/g, "");
+    const secret = clean(process.env.INTAKE_SECRET);
     const url = new URL(req.url);
-    const given = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "") || url.searchParams.get("key") || "";
+    const given = clean((req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")) || clean(url.searchParams.get("key"));
     if (!secret || !safeEqual(given, secret)) throw new HttpError(401, "unauthorized");
 
     const raw = await req.text();
