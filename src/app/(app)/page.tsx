@@ -1,8 +1,9 @@
 "use client";
 
-import { AlertTriangle, ArrowRight, CalendarClock, Check, Flame, ListTodo, Tent } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarClock, Check, ClipboardCheck, Flame, Inbox, ListTodo, NotebookPen, Tent } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { AiPanel } from "@/components/agent/ai-panel";
 import { CampDrawer } from "@/components/camps/camp-drawer";
 import { ColumnChart, SERIES, StackBar } from "@/components/charts";
 import { TaskModal } from "@/components/tasks/task-modal";
@@ -13,7 +14,7 @@ import { useStore } from "@/lib/data/store";
 import { greeting, periodStats, taskBuckets } from "@/lib/report";
 import { currentMonthKey, monthLabel, pctTone, planStats, tasksInMonths } from "@/lib/plan";
 import type { Task } from "@/lib/types";
-import { cn, dueLabel, isOverdue } from "@/lib/utils";
+import { cn, dueLabel, isOverdue, todayISO } from "@/lib/utils";
 
 const WEEKDAYS = ["Ням", "Даваа", "Мягмар", "Лхагва", "Пүрэв", "Баасан", "Бямба"];
 
@@ -26,7 +27,7 @@ const STAGE_BG: Record<string, string> = {
 };
 
 export default function Dashboard() {
-  const { me, tasks, camps, profileById, campById, updateTask } = useStore();
+  const { me, tasks, camps, approvals, dailyReports, departments, profileById, campById, updateTask } = useStore();
   const [openTask, setOpenTask] = useState<Task | null>(null);
   const [openCamp, setOpenCamp] = useState<string | null>(null);
 
@@ -81,12 +82,21 @@ export default function Dashboard() {
         </h1>
       </div>
 
+      <Nudges
+        toDecide={approvals.filter((a) => a.status === "pending" && a.approver_id === me?.id).length}
+        reported={dailyReports.some((r) => r.profile_id === me?.id && r.date === todayISO())}
+        incoming={open.filter((t) => t.from_department_id && t.department_id === me?.department_id && t.department_id && !t.assignee_id).length}
+        hasDepts={departments.length > 0}
+      />
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi href="/tasks" icon={<ListTodo size={18} />} label="Миний нээлттэй ажил" value={mine.length} tint="bg-brand-50 text-brand-600" />
         <Kpi href="/tasks" icon={<Flame size={18} />} label="Яаралтай" value={urgent.length} tint="bg-red-50 text-red-600" />
         <Kpi href="/tasks" icon={<AlertTriangle size={18} />} label="Хугацаа хэтэрсэн" value={overdue.length} tint="bg-orange-50 text-orange-600" alert={overdue.length > 0} />
         <Kpi href="/camps" icon={<Tent size={18} />} label="Мэдээлэл дутуу зуслан" value={missingTotal} tint="bg-amber-50 text-amber-600" />
       </div>
+
+      <AiPanel onOpenTask={setOpenTask} />
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.35fr_1fr]">
         <Card>
@@ -248,6 +258,28 @@ function CardHead({ title, sub, href, linkLabel = "Бүгдийг харах" }:
           {linkLabel} <ArrowRight size={12} />
         </Link>
       )}
+    </div>
+  );
+}
+
+function Nudges({ toDecide, reported, incoming, hasDepts }: { toDecide: number; reported: boolean; incoming: number; hasDepts: boolean }) {
+  const hour = new Date().getHours();
+  const items = [
+    toDecide > 0 && { href: "/approvals", icon: <ClipboardCheck size={15} />, text: `${toDecide} хүсэлт таны батлалтыг хүлээж байна`, tone: "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100" },
+    incoming > 0 && { href: "/departments", icon: <Inbox size={15} />, text: `Хэлтэст тань ${incoming} хүсэлт хариуцагчгүй ирсэн`, tone: "border-sky-200 bg-sky-50 text-sky-900 hover:bg-sky-100" },
+    !reported && hour >= 15 && { href: "/daily", icon: <NotebookPen size={15} />, text: "Өнөөдрийн тайлангаа бөглөөрэй", tone: "border-brand-200 bg-brand-50 text-brand-900 hover:bg-brand-100" },
+    !hasDepts && { href: "/departments", icon: <Inbox size={15} />, text: "Байгууллагын хэлтсүүдээ үүсгэх", tone: "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50" },
+  ].filter(Boolean) as { href: string; icon: React.ReactNode; text: string; tone: string }[];
+  if (!items.length) return null;
+  return (
+    <div className="mb-5 flex flex-wrap gap-2">
+      {items.map((i) => (
+        <Link key={i.href + i.text} href={i.href} className={cn("inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-sm font-medium transition", i.tone)}>
+          {i.icon}
+          {i.text}
+          <ArrowRight size={13} className="opacity-50" />
+        </Link>
+      ))}
     </div>
   );
 }

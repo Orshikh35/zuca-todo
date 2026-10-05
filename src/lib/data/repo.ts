@@ -1,4 +1,4 @@
-import type { Camp, CampInput, Profile, ProfileInput, Task, TaskInput } from "../types";
+import type { Camp, CampInput, Profile, ProfileInput, Rows, TableName, Task, TaskInput } from "../types";
 
 export interface Repo {
   mode: "demo" | "supabase";
@@ -23,6 +23,12 @@ export interface Repo {
   updateCamp(id: string, patch: Partial<Camp>): Promise<Camp>;
   deleteCamp(id: string): Promise<void>;
   importCamps(inputs: CampInput[]): Promise<Camp[]>;
+
+  /** Хэлтэс, хүсэлт, өдрийн тайлан, агентын түүх — ерөнхий CRUD */
+  list<K extends TableName>(table: K): Promise<Rows[K][]>;
+  insert<K extends TableName>(table: K, input: Partial<Rows[K]>): Promise<Rows[K]>;
+  patch<K extends TableName>(table: K, id: string, patch: Partial<Rows[K]>): Promise<Rows[K]>;
+  remove(table: TableName, id: string): Promise<void>;
 
   /** Бусдын өөрчлөлтийг сонсох. Буцаах функц нь unsubscribe. */
   subscribe(onChange: () => void): () => void;

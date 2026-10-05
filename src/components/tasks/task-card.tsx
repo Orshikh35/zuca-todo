@@ -1,6 +1,6 @@
 "use client";
 
-import { AlignLeft, CalendarClock, Check, Tent } from "lucide-react";
+import { AlignLeft, ArrowRightLeft, CalendarClock, Check, Tent } from "lucide-react";
 import { Avatar, PriorityChip } from "@/components/ui";
 import { useStore } from "@/lib/data/store";
 import type { Task } from "@/lib/types";
@@ -24,11 +24,13 @@ export function TaskCard({
   overlay?: boolean;
   showStatus?: boolean;
 }) {
-  const { profileById, campById, updateTask } = useStore();
+  const { profileById, campById, deptById, updateTask } = useStore();
   const done = task.status === "done";
   const due = dueLabel(task.due_date);
   const overdue = !done && due?.tone === "overdue";
   const camp = task.camp_id ? campById.get(task.camp_id) : undefined;
+  const from = task.from_department_id ? deptById.get(task.from_department_id) : undefined;
+  const to = task.department_id ? deptById.get(task.department_id) : undefined;
 
   return (
     <article
@@ -61,6 +63,15 @@ export function TaskCard({
           {task.title}
         </h4>
       </div>
+
+      {from && (
+        <div className="mt-2 flex items-center gap-1 truncate text-[11px] font-medium text-sky-700">
+          <ArrowRightLeft size={11} className="shrink-0" />
+          <span className="truncate">
+            {from.name} → {to?.name ?? "?"}
+          </span>
+        </div>
+      )}
 
       {camp && (
         <div className="mt-2 flex items-center gap-1 truncate text-xs text-zinc-500">

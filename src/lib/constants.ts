@@ -1,4 +1,4 @@
-import type { CampOwnership, CampSeason, CampStage, TaskPriority, TaskStatus } from "./types";
+import type { ApprovalKind, ApprovalStatus, CampOwnership, CampSeason, CampStage, Role, TaskPriority, TaskStatus } from "./types";
 
 export const STATUSES: { id: TaskStatus; label: string; hint: string }[] = [
   { id: "todo", label: "Хийх", hint: "Эхлээгүй" },
@@ -70,3 +70,27 @@ export const AIMAGS = [
   "Хөвсгөл",
   "Хэнтий",
 ];
+
+export const ROLES: { id: Role; label: string; hint: string; chip: string }[] = [
+  { id: "admin", label: "Систем админ", hint: "Бүх тохиргоо, эрх олгох", chip: "bg-zinc-900 text-white ring-zinc-900" },
+  { id: "director", label: "Удирдлага", hint: "Бүх хэлтсийг харж, хүсэлт батална", chip: "bg-violet-50 text-violet-700 ring-violet-200" },
+  { id: "manager", label: "Хэлтсийн дарга", hint: "Өөрийн хэлтсийн ажил, тайлан, хүсэлт", chip: "bg-sky-50 text-sky-700 ring-sky-200" },
+  { id: "member", label: "Ажилтан", hint: "Өөрийн ажил, тайлан", chip: "bg-zinc-100 text-zinc-600 ring-zinc-200" },
+];
+
+export const APPROVAL_KINDS: { id: ApprovalKind; label: string; hint: string; money?: boolean; dates?: boolean }[] = [
+  { id: "leave", label: "Чөлөө / амралт", hint: "Эхлэх, дуусах өдөр", dates: true },
+  { id: "purchase", label: "Худалдан авалт", hint: "Юу, хэдэн төгрөг", money: true },
+  { id: "expense", label: "Зардлын нөхөн олговор", hint: "Баримттай зардал", money: true },
+  { id: "trip", label: "Томилолт", hint: "Хаашаа, хэзээ", dates: true, money: true },
+  { id: "general", label: "Бусад", hint: "Ерөнхий хүсэлт" },
+];
+
+export const APPROVAL_STATUSES: { id: ApprovalStatus; label: string; chip: string }[] = [
+  { id: "pending", label: "Хүлээгдэж буй", chip: "bg-amber-50 text-amber-800 ring-amber-200" },
+  { id: "approved", label: "Батлагдсан", chip: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+  { id: "rejected", label: "Татгалзсан", chip: "bg-red-50 text-red-700 ring-red-200" },
+  { id: "cancelled", label: "Цуцалсан", chip: "bg-zinc-100 text-zinc-500 ring-zinc-200" },
+];
+
+export const DEPARTMENT_COLORS = ["#4f46e5", "#0891b2", "#ea580c", "#16a34a", "#db2777", "#7c3aed", "#ca8a04", "#0d9488", "#64748b"];

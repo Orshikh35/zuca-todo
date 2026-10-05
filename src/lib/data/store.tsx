@@ -2,7 +2,23 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured } from "../supabase/client";
-import type { Camp, CampInput, Profile, ProfileInput, Task, TaskInput } from "../types";
+import type {
+  AgentRun,
+  Approval,
+  ApprovalInput,
+  Camp,
+  CampInput,
+  DailyReport,
+  DailyReportInput,
+  Department,
+  DepartmentInput,
+  Profile,
+  ProfileInput,
+  Rows,
+  TableName,
+  Task,
+  TaskInput,
+} from "../types";
 import { createDemoRepo } from "./demo-repo";
 import type { Repo } from "./repo";
 import { createSupabaseRepo } from "./supabase-repo";
@@ -27,8 +43,13 @@ interface Store {
   profiles: Profile[];
   tasks: Task[];
   camps: Camp[];
+  departments: Department[];
+  approvals: Approval[];
+  dailyReports: DailyReport[];
+  agentRuns: AgentRun[];
   profileById: Map<string, Profile>;
   campById: Map<string, Camp>;
+  deptById: Map<string, Department>;
 
   createProfile(input: ProfileInput): Promise<Profile | undefined>;
   updateProfile(id: string, patch: Partial<Profile>): Promise<void>;
@@ -40,6 +61,16 @@ interface Store {
   updateCamp(id: string, patch: Partial<Camp>): Promise<void>;
   deleteCamp(id: string): Promise<void>;
   importCamps(inputs: CampInput[]): Promise<number>;
+
+  createDepartment(input: DepartmentInput): Promise<Department | undefined>;
+  updateDepartment(id: string, patch: Partial<Department>): Promise<void>;
+  deleteDepartment(id: string): Promise<void>;
+  createApproval(input: ApprovalInput): Promise<Approval | undefined>;
+  updateApproval(id: string, patch: Partial<Approval>): Promise<void>;
+  deleteApproval(id: string): Promise<void>;
+  /** Тухайн өдрийн тайланг үүсгэх эсвэл шинэчлэх */
+  saveDailyReport(input: DailyReportInput): Promise<DailyReport | undefined>;
+  logAgentRun(input: Omit<AgentRun, "id" | "created_at">): Promise<void>;
   refresh(): Promise<void>;
   signOut(): Promise<void>;
 
@@ -63,6 +94,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [camps, setCamps] = useState<Camp[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
+  const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastId = useRef(0);
 
@@ -76,18 +111,26 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Нэг query унасан ч бусад нь ачаалагдана. Ялангуяа `me` тогтоогдохгүй бол
   // Shell /login руу шидэж, middleware буцаагаад эцэс төгсгөлгүй гогцоо үүснэ.
   const refresh = useCallback(async () => {
-    const [u, p, t, c] = await Promise.allSettled([
+    const [u, p, t, c, d, a, r, g] = await Promise.allSettled([
       repo.currentUser(),
       repo.listProfiles(),
       repo.listTasks(),
       repo.listCamps(),
+      repo.list("departments"),
+      repo.list("approvals"),
+      repo.list("daily_reports"),
+      repo.list("agent_runs"),
     ]);
     if (u.status === "fulfilled") setMe(u.value);
     if (p.status === "fulfilled") setProfiles(p.value);
     if (t.status === "fulfilled") setTasks(t.value);
     if (c.status === "fulfilled") setCamps(c.value);
+    if (d.status === "fulfilled") setDepartments(d.value);
+    if (a.status === "fulfilled") setApprovals(a.value);
+    if (r.status === "fulfilled") setDailyReports(r.value);
+    if (g.status === "fulfilled") setAgentRuns(g.value);
 
-    const failed = [u, p, t, c].find((r) => r.status === "rejected");
+    const failed = [u, p, t, c, d, a, r, g].find((x) => x.status === "rejected");
     if (failed && failed.status === "rejected") throw failed.reason;
   }, [repo]);
 
@@ -109,6 +152,43 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const store = useMemo<Store>(() => {
     const profileById = new Map(profiles.map((p) => [p.id, p]));
     const campById = new Map(camps.map((c) => [c.id, c]));
+    const deptById = new Map(departments.map((d) => [d.id, d]));
+
+    /** Ерөнхий хүснэгтийн optimistic CRUD */
+    function crud<K extends TableName>(table: K, setRows: React.Dispatch<React.SetStateAction<Rows[K][]>>) {
+      return {
+        async create(input: Partial<Rows[K]>) {
+          try {
+            const row = await repo.insert(table, input);
+            setRows((prev) => [...prev, row]);
+            return row;
+          } catch (e) {
+            fail(e);
+          }
+        },
+        async update(id: string, patch: Partial<Rows[K]>) {
+          setRows((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+          try {
+            const saved = await repo.patch(table, id, patch);
+            setRows((prev) => prev.map((x) => (x.id === id ? saved : x)));
+          } catch (e) {
+            fail(e);
+          }
+        },
+        async remove(id: string) {
+          setRows((prev) => prev.filter((x) => x.id !== id));
+          try {
+            await repo.remove(table, id);
+          } catch (e) {
+            fail(e);
+          }
+        },
+      };
+    }
+    const deptCrud = crud("departments", setDepartments);
+    const apprCrud = crud("approvals", setApprovals);
+    const dailyCrud = crud("daily_reports", setDailyReports);
+
     return {
       mode: repo.mode,
       ready,
@@ -116,8 +196,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       profiles,
       tasks,
       camps,
+      departments,
+      approvals,
+      dailyReports,
+      agentRuns,
       profileById,
       campById,
+      deptById,
 
       async createProfile(input) {
         try {
@@ -144,6 +229,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         // Хариуцагчийг нь UI дээр шууд салгана
         setTasks((prev) => prev.map((t) => (t.assignee_id === id ? { ...t, assignee_id: null } : t)));
         setCamps((prev) => prev.map((c) => (c.owner_id === id ? { ...c, owner_id: null } : c)));
+        setDepartments((prev) => prev.map((d) => (d.head_id === id ? { ...d, head_id: null } : d)));
         try {
           await repo.deleteProfile(id);
           toast("Ажилтан устгагдлаа");
@@ -238,6 +324,54 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         }
       },
 
+      async createDepartment(input) {
+        const d = await deptCrud.create({ position: Date.now(), ...input });
+        if (d) toast(`${d.name} хэлтэс нэмэгдлээ`);
+        return d;
+      },
+      updateDepartment: deptCrud.update,
+      async deleteDepartment(id) {
+        setProfiles((prev) => prev.map((p) => (p.department_id === id ? { ...p, department_id: null } : p)));
+        setTasks((prev) =>
+          prev.map((t) => ({
+            ...t,
+            department_id: t.department_id === id ? null : t.department_id,
+            from_department_id: t.from_department_id === id ? null : t.from_department_id,
+          })),
+        );
+        await deptCrud.remove(id);
+        toast("Хэлтэс устгагдлаа");
+      },
+
+      async createApproval(input) {
+        const a = await apprCrud.create({ status: "pending", ...input });
+        if (a) toast("Хүсэлт илгээгдлээ");
+        return a;
+      },
+      updateApproval: apprCrud.update,
+      deleteApproval: apprCrud.remove,
+
+      async saveDailyReport(input) {
+        const existing = dailyReports.find((r) => r.profile_id === input.profile_id && r.date === input.date);
+        if (existing) {
+          await dailyCrud.update(existing.id, input);
+          toast("Тайлан шинэчлэгдлээ");
+          return { ...existing, ...input };
+        }
+        const r = await dailyCrud.create(input);
+        if (r) toast("Өдрийн тайлан илгээгдлээ");
+        return r;
+      },
+
+      async logAgentRun(input) {
+        try {
+          const row = await repo.insert("agent_runs", input);
+          setAgentRuns((prev) => [row, ...prev]);
+        } catch {
+          /* түүх бичигдэхгүй байсан ч илгээлт амжилттай */
+        }
+      },
+
       refresh,
       async signOut() {
         await repo.signOut();
@@ -247,7 +381,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       toast,
       dismissToast,
     };
-  }, [repo, ready, me, profiles, tasks, camps, toasts, toast, dismissToast, refresh, fail]);
+  }, [repo, ready, me, profiles, tasks, camps, departments, approvals, dailyReports, agentRuns, toasts, toast, dismissToast, refresh, fail]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

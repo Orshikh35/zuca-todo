@@ -28,6 +28,8 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
+  // API route-ууд өөрсдөө эрх шалгаж JSON алдаа буцаана (cron, Telegram webhook нь session-гүй)
+  if (path.startsWith("/api/")) return response;
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

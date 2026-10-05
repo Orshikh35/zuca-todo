@@ -43,8 +43,7 @@ export default function CampsPage() {
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return scored.filter((x) => {
-      const c = x.camp;
+    return scored.filter((x) => {      const c = x.camp;
       if (s && !`${c.name} ${c.contact_person ?? ""} ${c.phone ?? ""} ${c.soum ?? ""}`.toLowerCase().includes(s)) return false;
       if (aimag === "__none" ? c.aimag : aimag && c.aimag !== aimag) return false;
       if (fill === "missing" && x.complete) return false;

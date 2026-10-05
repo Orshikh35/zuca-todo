@@ -4,6 +4,8 @@ import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useStore } from "@/lib/data/store";
 import type { Profile, ProfileInput } from "@/lib/types";
+import { ROLES } from "@/lib/constants";
+import { atLeast, canEditProfile, canSetRole } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { Button, Modal } from "@/components/ui";
 
@@ -19,12 +21,16 @@ const blank = {
   job_title: "",
   color: MEMBER_COLORS[0],
   role: "member" as Profile["role"],
+  department_id: "",
+  telegram_chat_id: "",
+  notify_email: true,
+  notify_telegram: true,
   active: true,
   note: "",
 };
 
 export function MemberModal({ member, onClose }: { member: Profile | null; onClose: () => void }) {
-  const { createProfile, updateProfile, deleteProfile, profiles, me, tasks } = useStore();
+  const { createProfile, updateProfile, deleteProfile, profiles, me, tasks, departments } = useStore();
   const [f, setF] = useState(blank);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -42,16 +48,25 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
             job_title: member.job_title ?? "",
             color: member.color,
             role: member.role,
+            department_id: member.department_id ?? "",
+            telegram_chat_id: member.telegram_chat_id ?? "",
+            notify_email: member.notify_email,
+            notify_telegram: member.notify_telegram,
             active: member.active,
             note: member.note ?? "",
           }
-        : { ...blank, color: MEMBER_COLORS[profiles.length % MEMBER_COLORS.length] },
+        : { ...blank, color: MEMBER_COLORS[profiles.length % MEMBER_COLORS.length], department_id: me?.role === "manager" ? me.department_id ?? "" : "" },
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member, profiles.length]);
 
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((p) => ({ ...p, [k]: v }));
 
   const isMe = member?.id === me?.id;
+  const editable = canEditProfile(me, member, departments);
+  // Эрх: зөвхөн дээд түвшний хүн өөрчилнө, өөрийн эрхийг өөрөө өсгөхгүй
+  const roleOptions = ROLES.filter((r) => r.id === f.role || (canSetRole(me, r.id) && (!member || canSetRole(me, member.role))));
+  const canDelete = member && !isMe && atLeast(me, "manager") && editable;
   const assigned = member ? tasks.filter((t) => t.assignee_id === member.id && t.status !== "done").length : 0;
 
   async function save(e: React.FormEvent) {
@@ -72,6 +87,10 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
       job_title: f.job_title.trim() || null,
       color: f.color,
       role: f.role,
+      department_id: f.department_id || null,
+      telegram_chat_id: f.telegram_chat_id.trim() || null,
+      notify_email: f.notify_email,
+      notify_telegram: f.notify_telegram,
       active: f.active,
       note: f.note.trim() || null,
     };
@@ -90,7 +109,7 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
       title={member ? "Ажилтан засах" : "Шинэ ажилтан"}
       footer={
         <>
-          {member && !isMe && (
+          {canDelete && (
             <Button
               type="button"
               variant="danger"
@@ -106,7 +125,7 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
             </Button>
           )}
           <Button type="button" onClick={onClose}>Болих</Button>
-          <Button type="submit" form="member-form" variant="primary" disabled={busy}>
+          <Button type="submit" form="member-form" variant="primary" disabled={busy || !editable}>
             {member ? "Хадгалах" : "Бүртгэх"}
           </Button>
         </>
@@ -153,11 +172,32 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
 
         <div className="grid gap-3.5 sm:grid-cols-2">
           <div>
-            <label className="label" htmlFor="m-role">Эрх</label>
-            <select id="m-role" className="field" value={f.role} onChange={(e) => set("role", e.target.value as Profile["role"])}>
-              <option value="member">Гишүүн</option>
-              <option value="admin">Админ</option>
+            <label className="label" htmlFor="m-dept">Хэлтэс</label>
+            <select id="m-dept" className="field" value={f.department_id} onChange={(e) => set("department_id", e.target.value)}>
+              <option value="">— Хэлтэсгүй —</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
             </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="m-role">Эрхийн түвшин</label>
+            <select
+              id="m-role"
+              className="field"
+              value={f.role}
+              disabled={roleOptions.length < 2}
+              onChange={(e) => set("role", e.target.value as Profile["role"])}
+            >
+              {roleOptions.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-zinc-400">{ROLES.find((r) => r.id === f.role)?.hint}</p>
           </div>
           <div>
             <label className="label" htmlFor="m-active">Төлөв</label>
@@ -165,6 +205,30 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
               <option value="1">Ажиллаж байгаа</option>
               <option value="0">Идэвхгүй (гарсан)</option>
             </select>
+          </div>
+          <div>
+            <label className="label" htmlFor="m-tg">Telegram chat ID</label>
+            <input
+              id="m-tg"
+              className="field"
+              value={f.telegram_chat_id}
+              onChange={(e) => set("telegram_chat_id", e.target.value)}
+              placeholder="Bot-оор автоматаар холбогдоно"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-zinc-200 px-3 py-2.5">
+          <span className="label mb-2">Өглөө бүр AI туслах өнөөдрийн ажлыг илгээх</span>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input type="checkbox" className="size-4 accent-brand-600" checked={f.notify_email} onChange={(e) => set("notify_email", e.target.checked)} />
+              Имэйлээр
+            </label>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input type="checkbox" className="size-4 accent-brand-600" checked={f.notify_telegram} onChange={(e) => set("notify_telegram", e.target.checked)} />
+              Telegram-аар
+            </label>
           </div>
         </div>
 
@@ -184,6 +248,9 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
             Энэ хүн <b>{assigned}</b> дуусаагүй ажил хариуцаж байна. Устгавал тэр ажлууд <b>хариуцагчгүй</b> болно.
             Ажлаас гарсан бол устгахын оронд «Идэвхгүй» болгох нь зөв.
           </p>
+        )}
+        {!editable && (
+          <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500">Энэ ажилтны мэдээллийг засах эрх танд алга (зөвхөн хэлтсийн дарга, удирдлага).</p>
         )}
         {err && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
       </form>

@@ -1,5 +1,5 @@
 import { getSupabaseBrowser } from "../supabase/client";
-import type { Camp, Profile, Task } from "../types";
+import type { Camp, Profile, Rows, TableName, Task } from "../types";
 import type { Repo } from "./repo";
 
 /** Схем ажиллуулаагүй үед PostgREST-ийн ойлгомжгүй мессежийг зааварчилгаагаар солино */
@@ -66,6 +66,10 @@ export function createSupabaseRepo(): Repo {
         job_title: null,
         color: "#4f46e5",
         role: "member",
+        department_id: null,
+        telegram_chat_id: null,
+        notify_email: true,
+        notify_telegram: true,
         active: true,
         note: null,
         created_at: new Date().toISOString(),
@@ -132,6 +136,22 @@ export function createSupabaseRepo(): Repo {
       return must(await sb.from("camps").insert(inputs.map(clean)).select()) as Camp[];
     },
 
+    async list<K extends TableName>(table: K) {
+      if (table === "departments") return must(await sb.from(table).select("*").order("position")) as Rows[K][];
+      // Түүхэн мөрүүд хязгааргүй өснө — сүүлийнхийг л ачаална
+      const limit = table === "agent_runs" ? 300 : 3000;
+      return must(await sb.from(table).select("*").order("created_at", { ascending: false }).limit(limit)) as Rows[K][];
+    },
+    async insert<K extends TableName>(table: K, input: Partial<Rows[K]>) {
+      return must(await sb.from(table).insert(clean(input)).select().single()) as Rows[K];
+    },
+    async patch<K extends TableName>(table: K, id: string, patch: Partial<Rows[K]>) {
+      return must(await sb.from(table).update(clean(patch)).eq("id", id).select().single()) as Rows[K];
+    },
+    async remove(table, id) {
+      must(await sb.from(table).delete().eq("id", id));
+    },
+
     subscribe(onChange) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       const debounced = () => {
@@ -143,6 +163,9 @@ export function createSupabaseRepo(): Repo {
         .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "camps" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, debounced)
+        .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, debounced)
+        .on("postgres_changes", { event: "*", schema: "public", table: "approvals" }, debounced)
+        .on("postgres_changes", { event: "*", schema: "public", table: "daily_reports" }, debounced)
         .subscribe();
       return () => {
         clearTimeout(timer);

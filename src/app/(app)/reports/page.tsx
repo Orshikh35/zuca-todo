@@ -9,7 +9,8 @@ import { download } from "@/lib/csv";
 import { OWNERSHIPS, PRIORITIES, STAGES, STATUSES } from "@/lib/constants";
 import { useStore } from "@/lib/data/store";
 import { inRange, periodStats, taskBuckets } from "@/lib/report";
-import { cn, isOverdue, toISODate, todayISO } from "@/lib/utils";
+import { taskDeptId } from "@/lib/permissions";
+import { addDays, cn, isOverdue, toISODate, todayISO } from "@/lib/utils";
 
 type Range = "7" | "30" | "90";
 
@@ -18,7 +19,7 @@ const STAGE_RAMP = ["#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281"];
 const PRIORITY_HEX: Record<string, string> = { urgent: "#d03b3b", high: "#ec835a", medium: "#2a78d6", low: "#a1a1aa" };
 
 export default function ReportsPage() {
-  const { tasks, camps, profiles, campById } = useStore();
+  const { tasks, camps, profiles, campById, departments, dailyReports, approvals, profileById } = useStore();
   const [range, setRange] = useState<Range>("30");
   const days = Number(range);
 
@@ -42,6 +43,36 @@ export default function ReportsPage() {
     [profiles, tasks, stats.from],
   );
   const maxDone = Math.max(1, ...people.map((r) => r.done));
+
+  // Хэлтэс бүрийн гүйцэтгэл
+  const deptRows = useMemo(() => {
+    const workdays = Array.from({ length: days }, (_, i) => addDays(new Date(), -i))
+      .filter((d) => d.getDay() !== 0 && d.getDay() !== 6)
+      .map(toISODate);
+    return departments.map((d) => {
+      const own = tasks.filter((t) => taskDeptId(t, profileById) === d.id);
+      const o = own.filter((t) => t.status !== "done");
+      const done = own.filter((t) => inRange(t.completed_at, stats.from));
+      const withDue = done.filter((t) => t.due_date);
+      const onTime = withDue.filter((t) => toISODate(new Date(t.completed_at!)) <= t.due_date!).length;
+      const members = profiles.filter((p) => p.active && p.department_id === d.id);
+      const expected = members.length * workdays.length;
+      const submitted = dailyReports.filter((r) => members.some((m) => m.id === r.profile_id) && workdays.includes(r.date)).length;
+      const appr = approvals.filter((a) => a.department_id === d.id && inRange(a.created_at, stats.from));
+      return {
+        d,
+        members: members.length,
+        open: o.length,
+        overdue: o.filter((t) => isOverdue(t.due_date, false)).length,
+        done: done.length,
+        onTimePct: withDue.length ? Math.round((onTime / withDue.length) * 100) : null,
+        incoming: own.filter((t) => t.from_department_id && inRange(t.created_at, stats.from)).length,
+        reportPct: expected ? Math.round((Math.min(submitted, expected) / expected) * 100) : null,
+        approvals: appr.length,
+        approved: appr.filter((a) => a.status === "approved").length,
+      };
+    });
+  }, [departments, tasks, profiles, dailyReports, approvals, profileById, stats.from, days]);
 
   const scored = camps.map((c) => ({ c, ...completeness(c) }));
   const activeish = scored.filter((x) => x.c.stage !== "inactive");
@@ -76,13 +107,15 @@ export default function ReportsPage() {
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const head = ["Гарчиг", "Төлөв", "Яаралтай байдал", "Хариуцагч", "Зуслан", "Хугацаа", "Дууссан", "Үүссэн", "Шошго"];
+    const head = ["Гарчиг", "Төлөв", "Яаралтай байдал", "Хариуцагч", "Хэлтэс", "Хүсэлт гаргасан", "Зуслан", "Хугацаа", "Дууссан", "Үүссэн", "Шошго"];
     const rows = tasks.map((t) =>
       [
         t.title,
         STATUSES.find((s) => s.id === t.status)?.label,
         PRIORITIES.find((p) => p.id === t.priority)?.label,
         profiles.find((p) => p.id === t.assignee_id)?.full_name,
+        departments.find((d) => d.id === taskDeptId(t, profileById))?.name,
+        departments.find((d) => d.id === t.from_department_id)?.name,
         t.camp_id ? campById.get(t.camp_id)?.name : "",
         t.due_date,
         t.completed_at?.slice(0, 10),
@@ -181,6 +214,52 @@ export default function ReportsPage() {
           </div>
         </Panel>
       </div>
+
+      {deptRows.length > 0 && (
+        <Panel title="Хэлтсүүд" sub={`Сүүлийн ${days} хоног · тайлан = ажлын өдрүүдэд өдрийн тайлан өгсөн хувь`} className="mt-6" flush>
+          <div className="scroll-thin overflow-x-auto">
+            <table className="w-full min-w-[820px] text-sm">
+              <thead className="border-y border-zinc-100 bg-zinc-50/70 text-xs text-zinc-500">
+                <tr>
+                  <th className="py-2.5 pl-5 text-left font-medium">Хэлтэс</th>
+                  <th className="px-3 text-right font-medium">Хүн</th>
+                  <th className="px-3 text-right font-medium">Нээлттэй</th>
+                  <th className="px-3 text-right font-medium">Хэтэрсэн</th>
+                  <th className="px-3 text-right font-medium">Дууссан</th>
+                  <th className="px-3 text-right font-medium">Хугацаандаа</th>
+                  <th className="px-3 text-right font-medium">Ирсэн хүсэлт</th>
+                  <th className="px-3 text-right font-medium">Тайлан</th>
+                  <th className="px-5 text-right font-medium">Батлалт</th>
+                </tr>
+              </thead>
+              <tbody className="tabular divide-y divide-zinc-100">
+                {deptRows.map((r) => (
+                  <tr key={r.d.id}>
+                    <td className="py-2.5 pl-5">
+                      <span className="inline-flex items-center gap-2 font-medium">
+                        <span className="size-2.5 rounded-full" style={{ background: r.d.color }} />
+                        {r.d.name}
+                      </span>
+                    </td>
+                    <td className="px-3 text-right text-zinc-500">{r.members}</td>
+                    <td className="px-3 text-right">{r.open}</td>
+                    <td className={cn("px-3 text-right", r.overdue ? "font-semibold text-red-600" : "text-zinc-300")}>{r.overdue}</td>
+                    <td className="px-3 text-right font-semibold">{r.done}</td>
+                    <td className={cn("px-3 text-right", r.onTimePct == null ? "text-zinc-300" : r.onTimePct >= 80 ? "text-emerald-700" : r.onTimePct >= 50 ? "text-amber-700" : "text-red-600")}>
+                      {r.onTimePct == null ? "—" : `${r.onTimePct}%`}
+                    </td>
+                    <td className="px-3 text-right text-zinc-600">{r.incoming || <span className="text-zinc-300">0</span>}</td>
+                    <td className={cn("px-3 text-right", r.reportPct == null ? "text-zinc-300" : r.reportPct >= 80 ? "text-emerald-700" : r.reportPct >= 50 ? "text-amber-700" : "text-red-600")}>
+                      {r.reportPct == null ? "—" : `${r.reportPct}%`}
+                    </td>
+                    <td className="px-5 text-right text-zinc-600">{r.approvals ? `${r.approved}/${r.approvals}` : <span className="text-zinc-300">—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
 
       <Panel title="Багийн гишүүд" sub={`Дууссан = сүүлийн ${days} хоногт`} className="mt-6" flush>
         <div className="scroll-thin overflow-x-auto">

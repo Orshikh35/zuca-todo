@@ -10,6 +10,7 @@ import { Avatar, Button, PageHeader, Segmented } from "@/components/ui";
 import { PRIORITIES, STATUSES } from "@/lib/constants";
 import { useStore } from "@/lib/data/store";
 import type { Task, TaskPriority, TaskStatus } from "@/lib/types";
+import { taskDeptId } from "@/lib/permissions";
 import { addMonths, currentMonthKey, monthLabel } from "@/lib/plan";
 import { cn, isOverdue } from "@/lib/utils";
 
@@ -31,7 +32,7 @@ export default function TasksPage() {
 }
 
 function TasksInner() {
-  const { tasks, profiles, me, updateTask, createTask } = useStore();
+  const { tasks, profiles, departments, profileById, me, updateTask, createTask } = useStore();
   const params = useSearchParams();
   const [view, setView] = useState<View>(() => {
     try {
@@ -44,6 +45,8 @@ function TasksInner() {
   // /team → "энэ хүний ажлууд" холбоос ?who=<id> (эсвэл ?who=none) -оор ирнэ
   const [who, setWho] = useState<string | null>(() => params.get("who"));
   const [prio, setPrio] = useState<TaskPriority | null>(null);
+  // /departments → ?dept=<id>
+  const [dept, setDept] = useState<string>(() => params.get("dept") ?? "");
   const [overdueOnly, setOverdueOnly] = useState(false);
   // Төлөвлөгөө хуудаснаас ?month=YYYY-MM (эсвэл none) -оор ирнэ
   const [month, setMonth] = useState<string>(() => params.get("month") ?? "");
@@ -58,6 +61,7 @@ function TasksInner() {
   useEffect(() => {
     setWho(params.get("who"));
     if (params.get("month")) setMonth(params.get("month")!);
+    if (params.get("dept")) setDept(params.get("dept")!);
   }, [params]);
 
   // "N" товч — шинэ ажил
@@ -80,12 +84,13 @@ function TasksInner() {
       if (view === "priority" && t.status === "done") return false;
       if (who === "none" ? t.assignee_id : who && t.assignee_id !== who) return false;
       if (prio && t.priority !== prio) return false;
+      if (dept === "cross" ? !t.from_department_id : dept && taskDeptId(t, profileById) !== dept) return false;
       if (month === "none" ? t.planned_month : month && t.planned_month !== month) return false;
       if (overdueOnly && !isOverdue(t.due_date, t.status === "done")) return false;
       if (s && !`${t.title} ${t.description ?? ""} ${t.tags.join(" ")}`.toLowerCase().includes(s)) return false;
       return true;
     });
-  }, [tasks, q, who, prio, overdueOnly, view, month]);
+  }, [tasks, q, who, prio, overdueOnly, view, month, dept, profileById]);
 
   const columns: BoardColumn[] = useMemo(
     () =>
@@ -107,7 +112,7 @@ function TasksInner() {
   const open = tasks.filter((t) => t.status !== "done");
   const urgentCount = open.filter((t) => t.priority === "urgent").length;
   const overdueCount = open.filter((t) => isOverdue(t.due_date, false)).length;
-  const hasFilter = q || who || prio || overdueOnly || month;
+  const hasFilter = q || who || prio || overdueOnly || month || dept;
   const thisMonth = currentMonthKey();
   const monthOptions = Array.from(new Set([addMonths(thisMonth, -1), thisMonth, addMonths(thisMonth, 1), addMonths(thisMonth, 2), ...tasks.map((t) => t.planned_month).filter((m): m is string => !!m)])).sort();
 
@@ -208,6 +213,23 @@ function TasksInner() {
           <option value="none">Төлөвлөөгүй · {tasks.filter((t) => !t.planned_month && t.status !== "done").length}</option>
         </select>
 
+        {departments.length > 0 && (
+          <select
+            className={cn("field h-9 w-auto py-0", dept && "border-brand-300 bg-brand-50 text-brand-700")}
+            value={dept}
+            onChange={(e) => setDept(e.target.value)}
+            title="Хэлтсээр шүүх"
+          >
+            <option value="">Бүх хэлтэс</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+            <option value="cross">↔ Хэлтэс хоорондын хүсэлт</option>
+          </select>
+        )}
+
         <button
           onClick={() => setOverdueOnly(!overdueOnly)}
           className={cn(
@@ -228,6 +250,7 @@ function TasksInner() {
               setPrio(null);
               setOverdueOnly(false);
               setMonth("");
+              setDept("");
             }}
           >
             <X size={14} /> Цэвэрлэх
@@ -251,6 +274,7 @@ function TasksInner() {
                 title,
                 position: Date.now(),
                 assignee_id: me?.id ?? null,
+                department_id: dept && dept !== "cross" ? dept : me?.department_id ?? null,
                 planned_month: month && month !== "none" ? month : null,
                 ...(view === "status" ? { status: col as TaskStatus } : { priority: col as TaskPriority }),
               })
