@@ -27,15 +27,18 @@ export interface AgentContext {
   people: Profile[];
   departments: Department[];
   camps: CampLite[];
+  /** Явагдаж буй төслүүд (v7 схемгүй бол хоосон) */
+  projects: { id: string; name: string }[];
   load: Map<string, number>;
 }
 
 export async function loadAgentContext(sb: SupabaseClient): Promise<AgentContext> {
-  const [p, d, c, t] = await Promise.all([
+  const [p, d, c, t, pj] = await Promise.all([
     sb.from("profiles").select("*").eq("active", true),
     sb.from("departments").select("*").order("position"),
     sb.from("camps").select("id,name,aimag,stage,owner_id").order("name"),
     sb.from("tasks").select("assignee_id").neq("status", "done"),
+    sb.from("projects").select("id,name").neq("status", "done").order("position"),
   ]);
   const err = [p, d, c, t].find((x) => x.error)?.error;
   if (err) throw new Error(err.message);
@@ -43,7 +46,9 @@ export async function loadAgentContext(sb: SupabaseClient): Promise<AgentContext
   for (const row of t.data as { assignee_id: string | null }[]) {
     if (row.assignee_id) load.set(row.assignee_id, (load.get(row.assignee_id) ?? 0) + 1);
   }
-  return { people: p.data as Profile[], departments: d.data as Department[], camps: c.data as CampLite[], load };
+  // projects-ийн алдааг тоохгүй — схем v7 ажиллуулаагүй ч чат ажилласаар байна
+  const projects = (pj.data ?? []) as { id: string; name: string }[];
+  return { people: p.data as Profile[], departments: d.data as Department[], camps: c.data as CampLite[], projects, load };
 }
 
 export function authorLabel(m: Pick<Message, "author_kind" | "author_id" | "author_name">, byId: Map<string, Profile>) {

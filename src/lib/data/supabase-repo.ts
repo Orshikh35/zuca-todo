@@ -137,7 +137,7 @@ export function createSupabaseRepo(): Repo {
     },
 
     async list<K extends TableName>(table: K) {
-      if (table === "departments") return must(await sb.from(table).select("*").order("position")) as Rows[K][];
+      if (table === "departments" || table === "projects") return must(await sb.from(table).select("*").order("position")) as Rows[K][];
       // Түүхэн мөрүүд хязгааргүй өснө — сүүлийнхийг л ачаална
       const limit = table === "agent_runs" ? 300 : 3000;
       return must(await sb.from(table).select("*").order("created_at", { ascending: false }).limit(limit)) as Rows[K][];
@@ -152,6 +152,17 @@ export function createSupabaseRepo(): Repo {
       must(await sb.from(table).delete().eq("id", id));
     },
 
+    async projectProgress() {
+      const { data, error } = await sb.rpc("project_progress");
+      // Схем v7 ажиллуулаагүй бол клиент өөрийн харагдах ажлаар тооцно
+      if (error || !data) return {};
+      const out: Record<string, { total: number; done: number }> = {};
+      for (const r of data as { project_id: string; total: number; done: number }[]) {
+        out[r.project_id] = { total: Number(r.total), done: Number(r.done) };
+      }
+      return out;
+    },
+
     subscribe(onChange) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       const debounced = () => {
@@ -164,6 +175,7 @@ export function createSupabaseRepo(): Repo {
         .on("postgres_changes", { event: "*", schema: "public", table: "camps" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, debounced)
+        .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "approvals" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "daily_reports" }, debounced)
         .subscribe();

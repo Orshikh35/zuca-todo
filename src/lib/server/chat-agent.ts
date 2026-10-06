@@ -37,6 +37,8 @@ export interface AgentRequest {
   people: Profile[];
   departments: Department[];
   camps: CampLite[];
+  /** Явагдаж буй төслүүд */
+  projects: { id: string; name: string }[];
   /** profile id → нээлттэй ажлын тоо */
   load: Map<string, number>;
   today: string;
@@ -70,6 +72,7 @@ const SYSTEM = `Та бол ZUCA (zuca.mn — Монголын хүүхдийн 
 - priority: urgent — өнөөдөр, «яаралтай», төлбөрийн асуудал, эцэг эхийн гомдол, систем ажиллахгүй; high — энэ 7 хоногт, зуслан/гэрээтэй холбоотой чухал; medium — ердийн; low — хэзээ нэгэн цагт.
 - due_date: «өнөөдөр», «маргааш», «баасан гараг», «дараа 7 хоногт», «15-нд» гэх мэтийг өгөгдсөн өнөөдрийн огнооноос YYYY-MM-DD болго. Дурдаагүй бол urgent → өнөөдөр, high → 3 хоногийн дараа, бусад → хоосон.
 - camp_id: зуслангийн нэр дурдвал жагсаалтаас тааруул (ойролцоо бичлэг ч болно).
+- project_id: төслийн нэр дурдсан, эсвэл ажил тухайн төсөлд илт хамаарах бол («100 жилийн хаалтад урилга хэвлэх») төслийн жагсаалтаас тааруул. Үгүй бол хоосон.
 - id-г зөвхөн өгөгдсөн жагсаалтаас ав.
 
 Эцсийн хариу (чатад харагдана):
@@ -111,6 +114,7 @@ function contextBlock(r: AgentRequest) {
     `Хэлтсүүд: ${JSON.stringify(departments)}`,
     `Ажилчид: ${JSON.stringify(people)}`,
     `Зуслангууд: ${JSON.stringify(camps)}`,
+    `Төслүүд: ${JSON.stringify(r.projects)}`,
   ];
   return lines.join("\n");
 }
@@ -150,6 +154,7 @@ export async function runAgent(r: AgentRequest): Promise<AgentResult> {
   const campIds = new Set(r.camps.map((c) => c.id));
   const deptIds = new Set(r.departments.map((d) => d.id));
   const campName = new Map(r.camps.map((c) => [c.id, c.name]));
+  const projectIds = new Set(r.projects.map((p) => p.id));
   const okDate = (d: string) => (ISO.test(d) && d >= shiftDate(r.today, -60) ? d : "");
   // Claude нэг хариунд хэд хэдэн tool зэрэг дууддаг — create_task-ийг дараалуулж давхардлаас сэргийлнэ
   let lock: Promise<unknown> = Promise.resolve();
@@ -221,6 +226,7 @@ export async function runAgent(r: AgentRequest): Promise<AgentResult> {
       priority: PRIORITY,
       due_date: z.string().describe("YYYY-MM-DD эсвэл хоосон"),
       camp_id: z.string().describe("Зуслангийн id эсвэл хоосон"),
+      project_id: z.string().describe("Төслийн id эсвэл хоосон"),
       department_id: z.string().describe("Хэлтсийн id эсвэл хоосон (хариуцагчийнхаар автоматаар)"),
     }),
     run: (a) =>
@@ -232,6 +238,7 @@ export async function runAgent(r: AgentRequest): Promise<AgentResult> {
           }
           const assignee = peopleById.has(a.assignee_id) ? a.assignee_id : "";
           const camp = campIds.has(a.camp_id) ? a.camp_id : "";
+          const project = projectIds.has(a.project_id) ? a.project_id : "";
           const dept =
             (deptIds.has(a.department_id) ? a.department_id : "") ||
             (assignee ? peopleById.get(assignee)?.department_id ?? "" : "") ||
@@ -240,7 +247,7 @@ export async function runAgent(r: AgentRequest): Promise<AgentResult> {
           const due = okDate(a.due_date);
 
           if (r.mode === "suggest") {
-            proposals.push({ title, description: a.description.trim(), assignee_id: assignee, priority: a.priority, due_date: due, camp_id: camp, department_id: dept, status: "open" });
+            proposals.push({ title, description: a.description.trim(), assignee_id: assignee, priority: a.priority, due_date: due, camp_id: camp, project_id: project, department_id: dept, status: "open" });
             return "Санал болгон хадгаллаа — хүн «Үүсгэх» дарж батална.";
           }
 
@@ -256,6 +263,7 @@ export async function runAgent(r: AgentRequest): Promise<AgentResult> {
               status: "todo",
               assignee_id: assignee || null,
               camp_id: camp || null,
+              ...(project ? { project_id: project } : {}),
               department_id: dept || null,
               due_date: due || null,
               planned_month: due ? due.slice(0, 7) : null,

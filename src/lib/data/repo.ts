@@ -30,6 +30,12 @@ export interface Repo {
   patch<K extends TableName>(table: K, id: string, patch: Partial<Rows[K]>): Promise<Rows[K]>;
   remove(table: TableName, id: string): Promise<void>;
 
+  /**
+   * Төсөл бүрийн нийт / дууссан ажил — RLS-ээс үл хамааран бүх ажлыг тоолно
+   * (ажилтан бусдын ажлыг харахгүй ч төслийн явц % зөв гарна)
+   */
+  projectProgress(): Promise<Record<string, { total: number; done: number }>>;
+
   /** Бусдын өөрчлөлтийг сонсох. Буцаах функц нь unsubscribe. */
   subscribe(onChange: () => void): () => void;
 }

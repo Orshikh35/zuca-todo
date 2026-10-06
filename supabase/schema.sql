@@ -697,3 +697,69 @@ grant all    on public.zuca_shifts, public.app_meta to service_role;
 do $$ begin
   alter publication supabase_realtime add table public.zuca_shifts;
 exception when others then null; end $$;
+
+-- ═════════════════════════ v7: Төсөл ба ажилтны календарь ═════════════════════════
+-- Төсөл олон ажлыг нэгтгэнэ (жишээ нь «Зуслангийн 100 жилийн хаалт»).
+-- Явц % = дууссан ажил / нийт ажил. Календарь нь tasks.due_date-ийг ашиглана.
+
+create table if not exists public.projects (
+  id           uuid primary key default gen_random_uuid(),
+  name         text not null,
+  description  text,
+  color        text not null default '#4f46e5',
+  status       text not null default 'active' check (status in ('active', 'on_hold', 'done')),
+  owner_id     uuid references public.profiles (id) on delete set null,
+  camp_id      uuid references public.camps (id) on delete set null,
+  start_date   date,
+  due_date     date,
+  position     double precision not null default 0,
+  created_by   uuid references public.profiles (id) on delete set null,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+create index if not exists projects_status_idx on public.projects (status, position);
+
+-- Төслийг устгахад ажлууд нь устахгүй, зөвхөн төслөөс салгана
+alter table public.tasks add column if not exists project_id uuid references public.projects (id) on delete set null;
+create index if not exists tasks_project_idx on public.tasks (project_id);
+create index if not exists tasks_due_idx on public.tasks (assignee_id, due_date);
+
+drop trigger if exists projects_touch on public.projects;
+create trigger projects_touch before update on public.projects
+  for each row execute function public.touch_updated_at();
+
+drop trigger if exists projects_created_by on public.projects;
+create trigger projects_created_by before insert on public.projects
+  for each row execute function public.set_created_by();
+
+alter table public.projects enable row level security;
+drop policy if exists "projects select" on public.projects;
+drop policy if exists "projects insert" on public.projects;
+drop policy if exists "projects update" on public.projects;
+drop policy if exists "projects delete" on public.projects;
+-- Төслийг баг бүхэлдээ харж, үүсгэнэ. Засах — админ, хариуцагч, үүсгэгч. Устгах — админ, үүсгэгч.
+create policy "projects select" on public.projects for select to authenticated using (true);
+create policy "projects insert" on public.projects for insert to authenticated with check (true);
+create policy "projects update" on public.projects for update to authenticated using (
+  public.is_leader() or owner_id = public.my_profile_id() or created_by = public.my_profile_id()
+);
+create policy "projects delete" on public.projects for delete to authenticated using (
+  public.is_leader() or created_by = public.my_profile_id()
+);
+
+-- Ажилтан бусдын ажлыг харахгүй (RLS) ч төслийн явц % зөв гарахын тулд зөвхөн тоог нь буцаана
+create or replace function public.project_progress()
+returns table (project_id uuid, total bigint, done bigint)
+language sql stable security definer set search_path = public as $$
+  select t.project_id, count(*), count(*) filter (where t.status = 'done')
+    from public.tasks t
+   where t.project_id is not null
+     and auth.uid() is not null
+   group by t.project_id
+$$;
+revoke all on function public.project_progress() from public, anon;
+grant execute on function public.project_progress() to authenticated;
+
+do $$ begin
+  alter publication supabase_realtime add table public.projects;
+exception when others then null; end $$;

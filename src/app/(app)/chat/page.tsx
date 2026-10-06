@@ -696,6 +696,7 @@ function Proposals({ m }: { m: Message }) {
         priority: p.priority,
         assignee_id: p.assignee_id || null,
         camp_id: p.camp_id || null,
+        ...(p.project_id ? { project_id: p.project_id } : {}),
         department_id: p.department_id || null,
         due_date: p.due_date || null,
         planned_month: p.due_date ? p.due_date.slice(0, 7) : null,

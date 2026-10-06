@@ -14,6 +14,8 @@ import type {
   DepartmentInput,
   Profile,
   ProfileInput,
+  Project,
+  ProjectInput,
   Rows,
   TableName,
   Task,
@@ -39,6 +41,13 @@ function notifyTask(taskId: string, reason: "created" | "assigned") {
   }).catch(() => {});
 }
 
+export interface ProjectProgress {
+  total: number;
+  done: number;
+  /** null — ажилгүй төсөл */
+  pct: number | null;
+}
+
 export interface Toast {
   id: number;
   text: string;
@@ -54,12 +63,16 @@ interface Store {
   tasks: Task[];
   camps: Camp[];
   departments: Department[];
+  projects: Project[];
   approvals: Approval[];
   dailyReports: DailyReport[];
   agentRuns: AgentRun[];
   profileById: Map<string, Profile>;
   campById: Map<string, Camp>;
   deptById: Map<string, Department>;
+  projectById: Map<string, Project>;
+  /** Төслийн явц: дууссан / нийт ажил */
+  projectProgress(id: string): ProjectProgress;
 
   createProfile(input: ProfileInput): Promise<Profile | undefined>;
   updateProfile(id: string, patch: Partial<Profile>): Promise<void>;
@@ -75,6 +88,10 @@ interface Store {
   createDepartment(input: DepartmentInput): Promise<Department | undefined>;
   updateDepartment(id: string, patch: Partial<Department>): Promise<void>;
   deleteDepartment(id: string): Promise<void>;
+  createProject(input: ProjectInput): Promise<Project | undefined>;
+  updateProject(id: string, patch: Partial<Project>): Promise<void>;
+  /** Төслийг устгана — ажлууд нь устахгүй, зөвхөн төслөөс салгана */
+  deleteProject(id: string): Promise<void>;
   createApproval(input: ApprovalInput): Promise<Approval | undefined>;
   updateApproval(id: string, patch: Partial<Approval>): Promise<void>;
   deleteApproval(id: string): Promise<void>;
@@ -105,6 +122,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [camps, setCamps] = useState<Camp[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectCounts, setProjectCounts] = useState<Record<string, { total: number; done: number }>>({});
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
   const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
@@ -121,7 +140,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Нэг query унасан ч бусад нь ачаалагдана. Ялангуяа `me` тогтоогдохгүй бол
   // Shell /login руу шидэж, middleware буцаагаад эцэс төгсгөлгүй гогцоо үүснэ.
   const refresh = useCallback(async () => {
-    const [u, p, t, c, d, a, r, g] = await Promise.allSettled([
+    const [u, p, t, c, d, a, r, g, pj, pc] = await Promise.allSettled([
       repo.currentUser(),
       repo.listProfiles(),
       repo.listTasks(),
@@ -130,6 +149,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       repo.list("approvals"),
       repo.list("daily_reports"),
       repo.list("agent_runs"),
+      repo.list("projects"),
+      repo.projectProgress(),
     ]);
     if (u.status === "fulfilled") setMe(u.value);
     if (p.status === "fulfilled") setProfiles(p.value);
@@ -139,7 +160,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (a.status === "fulfilled") setApprovals(a.value);
     if (r.status === "fulfilled") setDailyReports(r.value);
     if (g.status === "fulfilled") setAgentRuns(g.value);
+    if (pj.status === "fulfilled") setProjects(pj.value);
+    if (pc.status === "fulfilled") setProjectCounts(pc.value);
 
+    // projects (v7) хүснэгт үүсээгүй байсан ч бусад хуудас ажилласаар байна
     const failed = [u, p, t, c, d, a, r, g].find((x) => x.status === "rejected");
     if (failed && failed.status === "rejected") throw failed.reason;
   }, [repo]);
@@ -163,6 +187,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const profileById = new Map(profiles.map((p) => [p.id, p]));
     const campById = new Map(camps.map((c) => [c.id, c]));
     const deptById = new Map(departments.map((d) => [d.id, d]));
+    const projectById = new Map(projects.map((p) => [p.id, p]));
 
     /** Ерөнхий хүснэгтийн optimistic CRUD */
     function crud<K extends TableName>(table: K, setRows: React.Dispatch<React.SetStateAction<Rows[K][]>>) {
@@ -198,9 +223,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const deptCrud = crud("departments", setDepartments);
     const apprCrud = crud("approvals", setApprovals);
     const dailyCrud = crud("daily_reports", setDailyReports);
+    const projCrud = crud("projects", setProjects);
 
     // Ажилтан зөвхөн өөрийн + эзэнгүй ажлыг харна (Supabase дээр RLS давхар хамгаална; demo горимд энд шүүнэ)
     const visibleTasks = isAdmin(me) ? tasks : tasks.filter((t) => canSeeTask(me, t));
+
+    // Админ бүх ажлыг хардаг тул шууд (optimistic) тоолно. Ажилтан бусдын ажлыг
+    // харахгүй тул серверийн тоог (project_progress) ашиглана.
+    const localCounts: Record<string, { total: number; done: number }> = {};
+    for (const t of visibleTasks) {
+      if (!t.project_id) continue;
+      const c = (localCounts[t.project_id] ??= { total: 0, done: 0 });
+      c.total++;
+      if (t.status === "done") c.done++;
+    }
+    const projectProgress = (id: string): ProjectProgress => {
+      const c = (!isAdmin(me) && projectCounts[id]) || localCounts[id] || { total: 0, done: 0 };
+      return { ...c, pct: c.total ? Math.round((c.done / c.total) * 100) : null };
+    };
 
     return {
       mode: repo.mode,
@@ -216,6 +256,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       profileById,
       campById,
       deptById,
+      projects,
+      projectById,
+      projectProgress,
 
       async createProfile(input) {
         try {
@@ -361,6 +404,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         toast("Хэлтэс устгагдлаа");
       },
 
+      async createProject(input) {
+        const p = await projCrud.create({ status: "active", color: "#4f46e5", position: Date.now(), ...input });
+        if (p) toast(`«${p.name}» төсөл үүслээ`);
+        return p;
+      },
+      updateProject: projCrud.update,
+      async deleteProject(id) {
+        setTasks((prev) => prev.map((t) => (t.project_id === id ? { ...t, project_id: null } : t)));
+        await projCrud.remove(id);
+        toast("Төсөл устгагдлаа — ажлууд нь хэвээр үлдлээ");
+      },
+
       async createApproval(input) {
         const a = await apprCrud.create({ status: "pending", ...input });
         if (a) toast("Хүсэлт илгээгдлээ");
@@ -399,7 +454,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       toast,
       dismissToast,
     };
-  }, [repo, ready, me, profiles, tasks, camps, departments, approvals, dailyReports, agentRuns, toasts, toast, dismissToast, refresh, fail]);
+  }, [repo, ready, me, profiles, tasks, camps, departments, projects, projectCounts, approvals, dailyReports, agentRuns, toasts, toast, dismissToast, refresh, fail]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

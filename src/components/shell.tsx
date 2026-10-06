@@ -2,11 +2,13 @@
 
 import {
   BarChart3,
+  CalendarDays,
   CalendarRange,
   CheckSquare,
   ChevronsLeft,
   ChevronsRight,
   ChevronsUpDown,
+  FolderKanban,
   LayoutGrid,
   Loader2,
   LogOut,
@@ -92,6 +94,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { href: "/", label: "Самбар", short: "Самбар", icon: LayoutGrid, mobile: true },
     { href: "/chat", label: "Чат", short: "Чат", icon: MessagesSquare, badge: chatUnread.total > 99 ? "99+" : chatUnread.total, tone: "bg-brand-500 text-white", mobile: true },
     { href: "/tasks", label: "Ажлууд", short: "Ажил", icon: CheckSquare, badge: mineUrgent, tone: "bg-red-500 text-white", mobile: true },
+    { href: "/projects", label: "Төслүүд", short: "Төсөл", icon: FolderKanban, badge: store.projects.filter((p) => p.status === "active").length || undefined, tone: "bg-zinc-200 text-zinc-700" },
+    { href: "/calendar", label: "Календарь", short: "Календарь", icon: CalendarDays },
     { href: "/plan", label: "Төлөвлөгөө", short: "Төлөвлөгөө", icon: CalendarRange },
     { href: "/camps", label: "Зуслангууд", short: "Зуслан", icon: Tent, badge: lead ? incomplete : undefined, tone: "bg-amber-400 text-amber-950", mobile: true },
     ...(lead
@@ -107,7 +111,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const roleLabel = `${ROLES.find((r) => r.id === me.role)?.label ?? ""}${myDept ? ` · ${myDept.name}` : ""}`;
 
   const groups: { title: string; items: NavItem[] }[] = [
-    { title: "Ажил", items: nav.filter((n) => ["/", "/chat", "/tasks", "/plan", "/camps"].includes(n.href)) },
+    { title: "Ажил", items: nav.filter((n) => ["/", "/chat", "/tasks", "/projects", "/calendar", "/plan", "/camps"].includes(n.href)) },
     ...(lead ? [{ title: "Удирдлага", items: nav.filter((n) => n.href === "/team" || n.href === "/reports") }] : []),
     { title: "Туслах", items: nav.filter((n) => n.href === "/agent") },
   ];

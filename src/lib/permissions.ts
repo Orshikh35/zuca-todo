@@ -1,4 +1,4 @@
-import type { Approval, DailyReport, Department, Profile, Role, Task } from "./types";
+import type { Approval, DailyReport, Department, Profile, Project, Role, Task } from "./types";
 
 /**
  * Эрхийн дүрэм — UI-д юу харуулах/идэвхжүүлэхийг шийднэ.
@@ -19,6 +19,15 @@ export function canSeeTask(me: Profile | null | undefined, t: Pick<Task, "assign
   if (isAdmin(me)) return true;
   if (!t.assignee_id) return true;
   return !!me && (t.assignee_id === me.id || t.created_by === me.id);
+}
+
+/** Төсөл засах: админ, төслийн хариуцагч, үүсгэгч (RLS v7-тэй ижил) */
+export function canEditProject(me: Profile | null | undefined, p: Pick<Project, "owner_id" | "created_by">) {
+  if (isAdmin(me)) return true;
+  return !!me && (p.owner_id === me.id || p.created_by === me.id);
+}
+export function canDeleteProject(me: Profile | null | undefined, p: Pick<Project, "created_by">) {
+  return isAdmin(me) || (!!me && p.created_by === me.id);
 }
 
 /** Байгууллагын бүтэц (хэлтэс, эрх) засах */

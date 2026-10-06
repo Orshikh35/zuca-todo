@@ -2,7 +2,7 @@
  * Demo горим: Supabase тохируулаагүй үед browser-ийн localStorage дээр ажиллана.
  */
 import { SEED_CAMPS, SEED_PEOPLE, SEED_TASKS } from "../seed-data";
-import type { AgentRun, Approval, Camp, DailyReport, Department, Profile, ProfileInput, Rows, TableName, Task } from "../types";
+import type { AgentRun, Approval, Camp, DailyReport, Department, Profile, ProfileInput, Project, Rows, TableName, Task } from "../types";
 import { addDays, toISODate, uid } from "../utils";
 import type { Repo } from "./repo";
 
@@ -13,6 +13,7 @@ interface DB {
   tasks: Task[];
   camps: Camp[];
   departments: Department[];
+  projects: Project[];
   approvals: Approval[];
   daily_reports: DailyReport[];
   agent_runs: AgentRun[];
@@ -262,7 +263,63 @@ export function buildSeed(): DB {
     });
   }
 
-  return { profiles, tasks, camps, departments, approvals, daily_reports, agent_runs: [], session: null };
+  const projects = seedProjects(profiles, tasks);
+
+  return { profiles, tasks, camps, departments, projects, approvals, daily_reports, agent_runs: [], session: null };
+}
+
+/** Жишээ төсөл — зарим ажил нь дууссан тул явц % харагдана */
+function seedProjects(profiles: Profile[], tasks: Task[]): Project[] {
+  const owner = profiles[0];
+  const project: Project = {
+    id: uid(),
+    name: "Зуслангийн 100 жилийн хаалт",
+    description: "Хүүхдийн зуслангийн 100 жилийн ойн хаалтын арга хэмжээ",
+    color: "#ea580c",
+    status: "active",
+    owner_id: owner?.id ?? null,
+    camp_id: null,
+    start_date: toISODate(addDays(new Date(), -14)),
+    due_date: toISODate(addDays(new Date(), 21)),
+    position: 1000,
+    created_by: owner?.id ?? null,
+    created_at: daysAgo(14),
+    updated_at: daysAgo(1),
+  };
+  const items: [string, Task["status"], number, number | null][] = [
+    ["Арга хэмжээний төсөв батлуулах", "done", -10, 0],
+    ["Тайз, дуу хоолойн түрээс захиалах", "done", -4, 1],
+    ["Урилга хэвлэж тараах", "in_progress", 3, 2],
+    ["Ахмад зуслангийн багш нарын жагсаалт гаргах", "todo", 6, 1],
+    ["Хүндэтгэлийн шагналын нэрс батлуулах", "review", 2, 0],
+    ["Хэвлэл мэдээллийн урилга, пресс реализ", "todo", 10, 2],
+    ["Фото, видео зураглаач захиалах", "todo", 14, 3],
+  ];
+  items.forEach(([title, status, due, who], i) => {
+    const d = toISODate(addDays(new Date(), due));
+    const p = who == null ? null : profiles[who % profiles.length];
+    tasks.push({
+      id: uid(),
+      title,
+      description: null,
+      status,
+      priority: i < 2 ? "high" : "medium",
+      position: (tasks.length + 1) * 1000,
+      assignee_id: p?.id ?? null,
+      camp_id: null,
+      project_id: project.id,
+      department_id: p?.department_id ?? null,
+      from_department_id: null,
+      due_date: d,
+      planned_month: d.slice(0, 7),
+      tags: ["100 жил"],
+      completed_at: status === "done" ? addDays(new Date(), due).toISOString() : null,
+      created_by: owner?.id ?? null,
+      created_at: daysAgo(14),
+      updated_at: daysAgo(1),
+    });
+  });
+  return [project];
 }
 
 /** Хуучин demo өгөгдлийг шинэ бүтцэд оруулна (хэлтэсгүй хувилбараас) */
@@ -274,6 +331,8 @@ function migrate(d: DB): DB {
     d.daily_reports = [];
   }
   d.agent_runs ??= [];
+  // v7: төсөл нэмэгдсэн — хуучин demo-д жишээ төслийг нэмнэ
+  if (!d.projects) d.projects = seedProjects(d.profiles, d.tasks);
   d.profiles.forEach((p) => {
     p.department_id ??= null;
     p.telegram_chat_id ??= null;
@@ -491,8 +550,8 @@ export function createDemoRepo(): Repo {
     async list<K extends TableName>(table: K) {
       const rows = db()[table] as Rows[K][];
       return delay(
-        table === "departments"
-          ? [...rows].sort((a, b) => (a as Department).position - (b as Department).position)
+        table === "departments" || table === "projects"
+          ? [...rows].sort((a, b) => (a as Department | Project).position - (b as Department | Project).position)
           : [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at)),
       );
     },
@@ -524,7 +583,19 @@ export function createDemoRepo(): Repo {
         d.departments.forEach((x) => x.parent_id === id && (x.parent_id = null));
         d.approvals.forEach((a) => a.department_id === id && (a.department_id = null));
       }
+      if (table === "projects") d.tasks.forEach((t) => t.project_id === id && (t.project_id = null));
       commit();
+    },
+
+    async projectProgress() {
+      const out: Record<string, { total: number; done: number }> = {};
+      for (const t of db().tasks) {
+        if (!t.project_id) continue;
+        const c = (out[t.project_id] ??= { total: 0, done: 0 });
+        c.total++;
+        if (t.status === "done") c.done++;
+      }
+      return delay(out);
     },
 
     subscribe(onChange) {

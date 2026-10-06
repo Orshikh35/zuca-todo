@@ -45,6 +45,8 @@ export interface Task {
   position: number;
   assignee_id: string | null;
   camp_id: string | null;
+  /** Аль төсөлд хамаарах (v7) */
+  project_id?: string | null;
   /** Ажлыг гүйцэтгэх хэлтэс */
   department_id: string | null;
   /** Өөр хэлтсээс ирсэн хүсэлт бол тэр хэлтэс */
@@ -119,6 +121,26 @@ export interface ZucaShift {
   is_open: boolean;
   is_day: boolean;
   synced_at: string;
+}
+
+/** Төсөл: олон ажлыг нэгтгэнэ. Явц % = дууссан ажил / нийт ажил (v7) */
+export type ProjectStatus = "active" | "on_hold" | "done";
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  status: ProjectStatus;
+  /** Төслийн хариуцагч */
+  owner_id: string | null;
+  camp_id: string | null;
+  start_date: string | null; // YYYY-MM-DD
+  due_date: string | null; // YYYY-MM-DD
+  position: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 /** Хэлтэс / нэгж. parent_id-аар шатлал үүсгэнэ */
@@ -205,6 +227,7 @@ export interface TaskProposal {
   due_date: string;
   camp_id: string;
   department_id: string;
+  project_id?: string;
   status?: "open" | "created" | "dismissed";
   task_id?: string;
 }
@@ -238,11 +261,13 @@ export type TaskInput = Partial<Omit<Task, "id" | "created_at" | "updated_at">> 
 export type CampInput = Partial<Omit<Camp, "id" | "created_at" | "updated_at">> & { name: string };
 export type DepartmentInput = Partial<Omit<Department, "id" | "created_at" | "updated_at">> & { name: string };
 export type ApprovalInput = Partial<Omit<Approval, "id" | "created_at" | "updated_at">> & { title: string; requester_id: string };
+export type ProjectInput = Partial<Omit<Project, "id" | "created_at" | "updated_at">> & { name: string };
 export type DailyReportInput = Partial<Omit<DailyReport, "id" | "created_at" | "updated_at">> & { profile_id: string; date: string; done: string };
 
 /** Ерөнхий CRUD хийгддэг хүснэгтүүд */
 export interface Rows {
   departments: Department;
+  projects: Project;
   approvals: Approval;
   daily_reports: DailyReport;
   agent_runs: AgentRun;

@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Crown, KeyRound, Mail, Phone, Plus, Search, Send, Users } from "lucide-react";
+import { Building2, CalendarDays, Crown, KeyRound, Mail, Phone, Plus, Search, Send, Users } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BulkAddModal } from "@/components/team/bulk-add-modal";
@@ -204,6 +204,9 @@ export default function TeamPage() {
               </div>
 
               <div className="mt-4 flex items-center gap-1.5">
+                <Link href={`/calendar?who=${p.id}`} title="Календарь — ажлууд хугацаагаараа" className="grid size-8 place-items-center rounded-full bg-zinc-100 text-zinc-500 hover:text-zinc-900">
+                  <CalendarDays size={14} />
+                </Link>
                 {p.email && (
                   <a href={`mailto:${p.email}`} title={p.email} className="grid size-8 place-items-center rounded-full bg-zinc-100 text-zinc-500 hover:text-zinc-900">
                     <Mail size={14} />

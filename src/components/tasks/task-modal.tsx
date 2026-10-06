@@ -18,6 +18,8 @@ export interface TaskDraft {
   from_department_id?: string | null;
   assignee_id?: string | null;
   description?: string | null;
+  project_id?: string | null;
+  due_date?: string | null;
 }
 
 export function TaskModal({
@@ -31,7 +33,7 @@ export function TaskModal({
   draft?: TaskDraft;
   onClose: () => void;
 }) {
-  const { profiles, camps, departments, me, createTask, updateTask, deleteTask, profileById, deptById, toast } = useStore();
+  const { profiles, camps, departments, projects, me, createTask, updateTask, deleteTask, profileById, deptById, toast } = useStore();
   const [f, setF] = useState(() => init());
 
   function init() {
@@ -44,7 +46,8 @@ export function TaskModal({
       department_id: task ? task.department_id ?? "" : draft?.department_id ?? me?.department_id ?? "",
       from_department_id: task?.from_department_id ?? draft?.from_department_id ?? "",
       camp_id: task?.camp_id ?? draft?.camp_id ?? "",
-      due_date: task?.due_date ?? "",
+      project_id: task?.project_id ?? draft?.project_id ?? "",
+      due_date: task?.due_date ?? draft?.due_date ?? "",
       planned_month: task?.planned_month ?? draft?.planned_month ?? "",
       tags: task?.tags.join(", ") ?? "",
     };
@@ -64,6 +67,8 @@ export function TaskModal({
       priority: f.priority,
       assignee_id: f.assignee_id || null,
       camp_id: f.camp_id || null,
+      // Төслийн багана (v7) байхгүй суулгац дээр эвдэхгүйн тулд зөвхөн өөрчлөгдсөн үед илгээнэ
+      ...(f.project_id || task?.project_id ? { project_id: f.project_id || null } : {}),
       department_id: f.department_id || null,
       from_department_id: f.from_department_id && f.from_department_id !== f.department_id ? f.from_department_id : null,
       due_date: f.due_date || null,
@@ -238,7 +243,20 @@ export function TaskModal({
             <label className="label">Төлөвлөсөн сар</label>
             <input type="month" className="field" value={f.planned_month} onChange={(e) => set("planned_month", e.target.value)} />
           </div>
-          <div className="sm:col-span-2">
+          <div>
+            <label className="label">Төсөл</label>
+            <Select className="field" value={f.project_id} onChange={(e) => set("project_id", e.target.value)}>
+              <option value="">— Төсөлгүй —</option>
+              {projects
+                .filter((p) => p.status !== "done" || p.id === f.project_id)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </Select>
+          </div>
+          <div>
             <label className="label">Холбоотой зуслан</label>
             <Select className="field" value={f.camp_id} onChange={(e) => set("camp_id", e.target.value)}>
               <option value="">— Байхгүй —</option>

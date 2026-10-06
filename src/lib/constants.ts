@@ -1,4 +1,4 @@
-import type { ApprovalKind, ApprovalStatus, CampOwnership, CampSeason, CampStage, Role, TaskPriority, TaskStatus } from "./types";
+import type { ApprovalKind, ApprovalStatus, CampOwnership, CampSeason, CampStage, ProjectStatus, Role, TaskPriority, TaskStatus } from "./types";
 
 export const STATUSES: { id: TaskStatus; label: string; hint: string }[] = [
   { id: "todo", label: "Хийх", hint: "Эхлээгүй" },
@@ -95,3 +95,9 @@ export const APPROVAL_STATUSES: { id: ApprovalStatus; label: string; chip: strin
 ];
 
 export const DEPARTMENT_COLORS = ["#4f46e5", "#0891b2", "#ea580c", "#16a34a", "#db2777", "#7c3aed", "#ca8a04", "#0d9488", "#64748b"];
+
+export const PROJECT_STATUSES: { id: ProjectStatus; label: string; chip: string }[] = [
+  { id: "active", label: "Явагдаж буй", chip: "bg-sky-50 text-sky-700 ring-sky-200" },
+  { id: "on_hold", label: "Түр зогссон", chip: "bg-amber-50 text-amber-800 ring-amber-200" },
+  { id: "done", label: "Хаагдсан", chip: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+];
