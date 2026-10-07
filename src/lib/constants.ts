@@ -1,4 +1,4 @@
-import type { ApprovalKind, ApprovalStatus, CampOwnership, CampSeason, CampStage, ProjectStatus, Role, TaskPriority, TaskStatus } from "./types";
+import type { ApprovalKind, ApprovalStatus, CampOwnership, CampSeason, CampStage, FileFolder, ProjectStatus, Role, TaskPriority, TaskStatus } from "./types";
 
 export const STATUSES: { id: TaskStatus; label: string; hint: string }[] = [
   { id: "todo", label: "Хийх", hint: "Эхлээгүй" },
@@ -100,4 +100,43 @@ export const PROJECT_STATUSES: { id: ProjectStatus; label: string; chip: string 
   { id: "active", label: "Явагдаж буй", chip: "bg-sky-50 text-sky-700 ring-sky-200" },
   { id: "on_hold", label: "Түр зогссон", chip: "bg-amber-50 text-amber-800 ring-amber-200" },
   { id: "done", label: "Хаагдсан", chip: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+];
+
+/** Зардлын ангилал. Цалин нь «Цалин» табаас автоматаар тайланд орно */
+export const EXPENSE_CATEGORIES: { id: string; label: string }[] = [
+  { id: "rent", label: "Түрээс" },
+  { id: "marketing", label: "Маркетинг, сурталчилгаа" },
+  { id: "transport", label: "Тээвэр, шатахуун" },
+  { id: "trip", label: "Томилолт" },
+  { id: "event", label: "Арга хэмжээ" },
+  { id: "office", label: "Оффисын хэрэглээ" },
+  { id: "equipment", label: "Тоног төхөөрөмж" },
+  { id: "software", label: "Програм, сервер" },
+  { id: "utilities", label: "Ашиглалтын зардал" },
+  { id: "hr", label: "Хүний нөөц (сургалт, урамшуулал)" },
+  { id: "tax", label: "Татвар, хураамж" },
+  { id: "other", label: "Бусад" },
+];
+export const PAYROLL_CATEGORY = { id: "salary", label: "Цалин (НДШ орсон)" };
+
+export const INCOME_CATEGORIES: { id: string; label: string }[] = [
+  { id: "commission", label: "Захиалгын шимтгэл" },
+  { id: "partner", label: "Зуслангийн төлбөр" },
+  { id: "ads", label: "Сурталчилгааны орлого" },
+  { id: "grant", label: "Санхүүжилт, хандив" },
+  { id: "other", label: "Бусад" },
+];
+
+export function financeCategoryLabel(kind: "expense" | "income", id: string) {
+  if (id === PAYROLL_CATEGORY.id) return PAYROLL_CATEGORY.label;
+  return (kind === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).find((c) => c.id === id)?.label ?? id;
+}
+
+export const FILE_FOLDERS: { id: FileFolder; label: string; emoji: string }[] = [
+  { id: "contracts", label: "Гэрээ", emoji: "📝" },
+  { id: "receipts", label: "Баримт, нэхэмжлэх", emoji: "🧾" },
+  { id: "payroll", label: "Цалингийн хүснэгт", emoji: "💵" },
+  { id: "hr", label: "Хүний нөөц", emoji: "🪪" },
+  { id: "reports", label: "Тайлан", emoji: "📊" },
+  { id: "other", label: "Бусад", emoji: "📁" },
 ];

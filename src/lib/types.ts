@@ -143,6 +143,73 @@ export interface Project {
   updated_at: string;
 }
 
+/** ── Санхүү (v8) — зөвхөн админ харна ── */
+export type FinanceKind = "expense" | "income";
+
+/** Зардал эсвэл орлогын нэг гүйлгээ. Мөнгөн дүн — төгрөг (бүхэл тоо) */
+export interface FinanceEntry {
+  id: string;
+  kind: FinanceKind;
+  category: string;
+  title: string;
+  amount: number;
+  date: string; // YYYY-MM-DD
+  /** Хэнд төлсөн / хэнээс орсон */
+  vendor: string | null;
+  description: string | null;
+  department_id: string | null;
+  project_id: string | null;
+  /** Холбоотой ажилтан (томилолт, сургалт гэх мэт) */
+  profile_id: string | null;
+  /** Батлагдсан хүсэлтээс бүртгэсэн бол */
+  approval_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Ажилтны нэг сарын цалин. Гарт олгох = үндсэн + нэмэгдэл − суутгалууд */
+export interface Payroll {
+  id: string;
+  profile_id: string;
+  month: string; // YYYY-MM
+  base_salary: number;
+  bonus: number;
+  /** Ажилтнаас суутгах НДШ */
+  social_insurance: number;
+  /** ХХОАТ */
+  income_tax: number;
+  other_deductions: number;
+  /** Байгууллагаас төлөх НДШ — зардалд нэмэгдэнэ */
+  employer_insurance: number;
+  paid: boolean;
+  paid_at: string | null;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type FileFolder = "contracts" | "receipts" | "payroll" | "hr" | "reports" | "other";
+
+/** Хадгалсан файлын мэдээлэл (агуулга нь Supabase Storage-д) */
+export interface StoredFile {
+  id: string;
+  name: string;
+  /** Storage доторх зам */
+  path: string;
+  size: number;
+  mime: string | null;
+  folder: FileFolder;
+  /** Аль зардал/орлогын баримт */
+  entry_id: string | null;
+  /** Аль ажилтны хувийн хэрэг */
+  profile_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Хэлтэс / нэгж. parent_id-аар шатлал үүсгэнэ */
 export interface Department {
   id: string;
@@ -268,6 +335,9 @@ export type DailyReportInput = Partial<Omit<DailyReport, "id" | "created_at" | "
 export interface Rows {
   departments: Department;
   projects: Project;
+  finance_entries: FinanceEntry;
+  payroll: Payroll;
+  files: StoredFile;
   approvals: Approval;
   daily_reports: DailyReport;
   agent_runs: AgentRun;

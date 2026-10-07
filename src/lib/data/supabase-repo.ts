@@ -3,6 +3,9 @@ import type { Camp, Profile, Rows, TableName, Task } from "../types";
 import type { Repo } from "./repo";
 
 /** Схем ажиллуулаагүй үед PostgREST-ийн ойлгомжгүй мессежийг зааварчилгаагаар солино */
+/** Хувийн (public биш) bucket — зөвхөн админ уншина (schema.sql v8) */
+const BUCKET = "zuca-files";
+
 const SCHEMA_MISSING =
   "Supabase-д хүснэгт үүсээгүй байна. Dashboard → SQL Editor дээр supabase/schema.sql-ийг бүтнээр нь paste хийгээд Run дарна уу.";
 
@@ -163,6 +166,26 @@ export function createSupabaseRepo(): Repo {
       return out;
     },
 
+    async uploadFile(path, file) {
+      const { error } = await sb.storage.from(BUCKET).upload(path, file, { contentType: file.type || undefined, upsert: false });
+      if (error) {
+        throw new Error(
+          /bucket not found/i.test(error.message)
+            ? "Файлын сан үүсээгүй байна. Supabase SQL Editor дээр supabase/schema.sql-ийг дахин Run хийнэ үү."
+            : error.message,
+        );
+      }
+    },
+    async fileUrl(path, downloadAs) {
+      const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(path, 120, downloadAs ? { download: downloadAs } : undefined);
+      if (error || !data) throw new Error(error?.message ?? "Файлын холбоос үүссэнгүй");
+      return data.signedUrl;
+    },
+    async removeFileObject(path) {
+      const { error } = await sb.storage.from(BUCKET).remove([path]);
+      if (error) throw new Error(error.message);
+    },
+
     subscribe(onChange) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       const debounced = () => {
@@ -176,6 +199,9 @@ export function createSupabaseRepo(): Repo {
         .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, debounced)
+        .on("postgres_changes", { event: "*", schema: "public", table: "finance_entries" }, debounced)
+        .on("postgres_changes", { event: "*", schema: "public", table: "payroll" }, debounced)
+        .on("postgres_changes", { event: "*", schema: "public", table: "files" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "approvals" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "daily_reports" }, debounced)
         .subscribe();

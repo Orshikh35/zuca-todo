@@ -20,6 +20,7 @@ import {
   Sun,
   Tent,
   Users,
+  Wallet,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -30,7 +31,7 @@ import { completeness } from "@/lib/completeness";
 import { ROLES } from "@/lib/constants";
 import { resetDemo } from "@/lib/data/demo-repo";
 import { useStore } from "@/lib/data/store";
-import { atLeast } from "@/lib/permissions";
+import { atLeast, isAdmin } from "@/lib/permissions";
 import { useTheme, type ThemePref } from "@/lib/theme";
 import { cn, isOverdue } from "@/lib/utils";
 import { Avatar } from "./ui";
@@ -89,6 +90,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   ).length;
   const incomplete = camps.filter((c) => c.stage !== "inactive" && !completeness(c).complete).length;
   const lead = atLeast(me, "manager");
+  // Санхүү, цалин, файл — зөвхөн админ (ажилтанд цэс ч харагдахгүй)
+  const admin = isAdmin(me);
 
   const nav: NavItem[] = [
     { href: "/", label: "Самбар", short: "Самбар", icon: LayoutGrid, mobile: true },
@@ -104,6 +107,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           { href: "/reports", label: "Тайлан", short: "Тайлан", icon: BarChart3 },
         ]
       : []),
+    ...(admin ? [{ href: "/finance", label: "Санхүү", short: "Санхүү", icon: Wallet }] : []),
     { href: "/agent", label: "AI туслах", short: "AI", icon: Sparkles },
   ];
   const isActive = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
@@ -112,7 +116,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   const groups: { title: string; items: NavItem[] }[] = [
     { title: "Ажил", items: nav.filter((n) => ["/", "/chat", "/tasks", "/projects", "/calendar", "/plan", "/camps"].includes(n.href)) },
-    ...(lead ? [{ title: "Удирдлага", items: nav.filter((n) => n.href === "/team" || n.href === "/reports") }] : []),
+    ...(lead || admin ? [{ title: "Удирдлага", items: nav.filter((n) => ["/team", "/reports", "/finance"].includes(n.href)) }] : []),
     { title: "Туслах", items: nav.filter((n) => n.href === "/agent") },
   ];
 

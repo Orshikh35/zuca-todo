@@ -2,7 +2,7 @@
  * Demo горим: Supabase тохируулаагүй үед browser-ийн localStorage дээр ажиллана.
  */
 import { SEED_CAMPS, SEED_PEOPLE, SEED_TASKS } from "../seed-data";
-import type { AgentRun, Approval, Camp, DailyReport, Department, Profile, ProfileInput, Project, Rows, TableName, Task } from "../types";
+import type { AgentRun, Approval, Camp, DailyReport, Department, FinanceEntry, Payroll, Profile, ProfileInput, Project, Rows, StoredFile, TableName, Task } from "../types";
 import { addDays, toISODate, uid } from "../utils";
 import type { Repo } from "./repo";
 
@@ -14,6 +14,9 @@ interface DB {
   camps: Camp[];
   departments: Department[];
   projects: Project[];
+  finance_entries: FinanceEntry[];
+  payroll: Payroll[];
+  files: StoredFile[];
   approvals: Approval[];
   daily_reports: DailyReport[];
   agent_runs: AgentRun[];
@@ -265,7 +268,81 @@ export function buildSeed(): DB {
 
   const projects = seedProjects(profiles, tasks);
 
-  return { profiles, tasks, camps, departments, projects, approvals, daily_reports, agent_runs: [], session: null };
+  const { finance_entries, payroll } = seedFinance(profiles, departments, projects);
+
+  return { profiles, tasks, camps, departments, projects, finance_entries, payroll, files: [], approvals, daily_reports, agent_runs: [], session: null };
+}
+
+/** Жишээ санхүү: сүүлийн 6 сарын цалин, зардал, орлого */
+function seedFinance(profiles: Profile[], departments: Department[], projects: Project[]) {
+  const finance_entries: FinanceEntry[] = [];
+  const payroll: Payroll[] = [];
+  const admin = profiles.find((p) => p.role === "admin") ?? profiles[0];
+  const dept = (code: string) => departments.find((d) => d.code === code)?.id ?? null;
+  const salaries = [3_500_000, 2_400_000, 2_200_000, 1_800_000, 2_600_000, 2_300_000, 1_900_000, 3_000_000];
+  const at = (n: number, day: number) => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - n);
+    d.setDate(Math.min(day, 28));
+    return toISODate(d);
+  };
+  for (let back = 5; back >= 0; back--) {
+    const month = at(back, 1).slice(0, 7);
+    profiles.forEach((p, i) => {
+      if (!p.active) return;
+      const base = salaries[i % salaries.length];
+      const bonus = back === 1 && i % 3 === 0 ? 300_000 : 0;
+      const si = Math.round((base + bonus) * 0.115);
+      payroll.push({
+        id: uid(),
+        profile_id: p.id,
+        month,
+        base_salary: base,
+        bonus,
+        social_insurance: si,
+        income_tax: Math.round((base + bonus - si) * 0.1),
+        other_deductions: 0,
+        employer_insurance: Math.round((base + bonus) * 0.125),
+        paid: back > 0,
+        paid_at: back > 0 ? at(back, 28) : null,
+        note: null,
+        created_by: admin?.id ?? null,
+        created_at: at(back, 25),
+        updated_at: at(back, 25),
+      });
+    });
+    const add = (kind: FinanceEntry["kind"], category: string, title: string, amount: number, day: number, extra: Partial<FinanceEntry> = {}) =>
+      finance_entries.push({
+        id: uid(),
+        kind,
+        category,
+        title,
+        amount,
+        date: at(back, day),
+        vendor: null,
+        description: null,
+        department_id: null,
+        project_id: null,
+        profile_id: null,
+        approval_id: null,
+        created_by: admin?.id ?? null,
+        created_at: at(back, day),
+        updated_at: at(back, day),
+        ...extra,
+      });
+    add("expense", "rent", "Оффисын түрээс", 2_800_000, 5, { vendor: "Central Tower" });
+    add("expense", "software", "Сервер, домэйн", 420_000 + back * 10_000, 8, { department_id: dept("EXEC") });
+    add("expense", "marketing", "Facebook сурталчилгаа", 900_000 + (5 - back) * 150_000, 12, { department_id: dept("MKT"), vendor: "Meta" });
+    add("expense", "transport", "Зуслан шалгах шатахуун", 250_000 + (back % 3) * 80_000, 18, { department_id: dept("PART") });
+    add("expense", "utilities", "Цахилгаан, интернэт", 310_000, 20);
+    add("income", "commission", "zuca.mn захиалгын шимтгэл", 6_500_000 + (5 - back) * 1_200_000, 27, { vendor: "zuca.mn" });
+    if (back % 2 === 0) add("income", "partner", "Зуслангийн байршуулалтын төлбөр", 1_500_000, 15);
+    if (back <= 1 && projects[0]) {
+      add("expense", "event", "Тайз, дуу хоолойн түрээс — урьдчилгаа", 1_200_000, 22, { project_id: projects[0].id, department_id: dept("MKT") });
+    }
+  }
+  return { finance_entries, payroll };
 }
 
 /** Жишээ төсөл — зарим ажил нь дууссан тул явц % харагдана */
@@ -333,6 +410,9 @@ function migrate(d: DB): DB {
   d.agent_runs ??= [];
   // v7: төсөл нэмэгдсэн — хуучин demo-д жишээ төслийг нэмнэ
   if (!d.projects) d.projects = seedProjects(d.profiles, d.tasks);
+  // v8: санхүү, файл
+  if (!d.finance_entries) Object.assign(d, seedFinance(d.profiles, d.departments, d.projects));
+  d.files ??= [];
   d.profiles.forEach((p) => {
     p.department_id ??= null;
     p.telegram_chat_id ??= null;
@@ -363,6 +443,15 @@ function save(db: DB) {
     localStorage.setItem(KEY, JSON.stringify(db));
   } catch {
     /* ignore */
+  }
+}
+
+const FILES_KEY = "zuca-ops-demo-files";
+function loadBlobs(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(FILES_KEY) ?? "{}") as Record<string, string>;
+  } catch {
+    return {};
   }
 }
 
@@ -437,6 +526,10 @@ export function createDemoRepo(): Repo {
         if (x.head_id === id) x.head_id = null;
       });
       if (d.session === id) d.session = null;
+      // Supabase-ийн cascade / set null-тэй адил
+      d.payroll = d.payroll.filter((x) => x.profile_id !== id);
+      d.files.forEach((f) => f.profile_id === id && (f.profile_id = null));
+      d.finance_entries.forEach((e) => e.profile_id === id && (e.profile_id = null));
       commit();
     },
 
@@ -583,7 +676,11 @@ export function createDemoRepo(): Repo {
         d.departments.forEach((x) => x.parent_id === id && (x.parent_id = null));
         d.approvals.forEach((a) => a.department_id === id && (a.department_id = null));
       }
-      if (table === "projects") d.tasks.forEach((t) => t.project_id === id && (t.project_id = null));
+      if (table === "projects") {
+        d.tasks.forEach((t) => t.project_id === id && (t.project_id = null));
+        d.finance_entries.forEach((e) => e.project_id === id && (e.project_id = null));
+      }
+      if (table === "finance_entries") d.files.forEach((f) => f.entry_id === id && (f.entry_id = null));
       commit();
     },
 
@@ -596,6 +693,36 @@ export function createDemoRepo(): Repo {
         if (t.status === "done") c.done++;
       }
       return delay(out);
+    },
+
+    async uploadFile(path, file) {
+      // Demo: browser-ийн localStorage багтаамж ~5MB тул жижиг файл л хадгална
+      if (file.size > 1.5 * 1048576) throw new Error("Demo горимд 1.5MB-аас бага файл л хадгална (Supabase-д 50MB хүртэл)");
+      const dataUrl = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result));
+        r.onerror = () => rej(new Error("Файл уншиж чадсангүй"));
+        r.readAsDataURL(file);
+      });
+      const blobs = loadBlobs();
+      blobs[path] = dataUrl;
+      try {
+        localStorage.setItem(FILES_KEY, JSON.stringify(blobs));
+      } catch {
+        throw new Error("Browser-ийн санах ой дүүрлээ — demo-д хуучин файлаа устгана уу");
+      }
+    },
+    async fileUrl(path) {
+      const url = loadBlobs()[path];
+      if (!url) throw new Error("Файл олдсонгүй");
+      return url;
+    },
+    async removeFileObject(path) {
+      const blobs = loadBlobs();
+      delete blobs[path];
+      try {
+        localStorage.setItem(FILES_KEY, JSON.stringify(blobs));
+      } catch {}
     },
 
     subscribe(onChange) {

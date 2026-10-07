@@ -763,3 +763,125 @@ grant execute on function public.project_progress() to authenticated;
 do $$ begin
   alter publication supabase_realtime add table public.projects;
 exception when others then null; end $$;
+
+-- ═════════════════════════ v8: Санхүү, цалин, файлын сан — ЗӨВХӨН АДМИН ═════════════════════════
+-- Ажилтанд (member) эдгээр хүснэгт, файл огт харагдахгүй: RLS нь бүх үйлдэлд is_leader() шаардана.
+
+-- ── Зардал, орлого ──
+create table if not exists public.finance_entries (
+  id             uuid primary key default gen_random_uuid(),
+  kind           text not null default 'expense' check (kind in ('expense', 'income')),
+  category       text not null default 'other',
+  title          text not null,
+  amount         bigint not null default 0 check (amount >= 0),       -- төгрөг
+  date           date not null default current_date,
+  vendor         text,
+  description    text,
+  department_id  uuid references public.departments (id) on delete set null,
+  project_id     uuid references public.projects (id) on delete set null,
+  profile_id     uuid references public.profiles (id) on delete set null,
+  approval_id    uuid references public.approvals (id) on delete set null,
+  created_by     uuid references public.profiles (id) on delete set null,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+create index if not exists finance_entries_date_idx on public.finance_entries (date desc);
+create index if not exists finance_entries_project_idx on public.finance_entries (project_id);
+
+-- ── Цалин: ажилтан бүрт сард нэг мөр ──
+create table if not exists public.payroll (
+  id                  uuid primary key default gen_random_uuid(),
+  profile_id          uuid not null references public.profiles (id) on delete cascade,
+  month               text not null check (month ~ '^\d{4}-\d{2}$'),
+  base_salary         bigint not null default 0 check (base_salary >= 0),
+  bonus               bigint not null default 0 check (bonus >= 0),
+  social_insurance    bigint not null default 0 check (social_insurance >= 0),   -- ажилтны НДШ
+  income_tax          bigint not null default 0 check (income_tax >= 0),         -- ХХОАТ
+  other_deductions    bigint not null default 0 check (other_deductions >= 0),
+  employer_insurance  bigint not null default 0 check (employer_insurance >= 0), -- байгууллагын НДШ
+  paid                boolean not null default false,
+  paid_at             date,
+  note                text,
+  created_by          uuid references public.profiles (id) on delete set null,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now(),
+  unique (profile_id, month)
+);
+create index if not exists payroll_month_idx on public.payroll (month);
+
+-- ── Файлын сан: агуулга нь Storage-ийн «zuca-files» bucket-д, мэдээлэл нь энд ──
+create table if not exists public.files (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  path        text not null unique,
+  size        bigint not null default 0,
+  mime        text,
+  folder      text not null default 'other' check (folder in ('contracts', 'receipts', 'payroll', 'hr', 'reports', 'other')),
+  entry_id    uuid references public.finance_entries (id) on delete set null,
+  profile_id  uuid references public.profiles (id) on delete set null,
+  created_by  uuid references public.profiles (id) on delete set null,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists files_folder_idx on public.files (folder, created_at desc);
+
+drop trigger if exists finance_entries_touch on public.finance_entries;
+create trigger finance_entries_touch before update on public.finance_entries
+  for each row execute function public.touch_updated_at();
+drop trigger if exists payroll_touch on public.payroll;
+create trigger payroll_touch before update on public.payroll
+  for each row execute function public.touch_updated_at();
+drop trigger if exists files_touch on public.files;
+create trigger files_touch before update on public.files
+  for each row execute function public.touch_updated_at();
+
+drop trigger if exists finance_entries_created_by on public.finance_entries;
+create trigger finance_entries_created_by before insert on public.finance_entries
+  for each row execute function public.set_created_by();
+drop trigger if exists payroll_created_by on public.payroll;
+create trigger payroll_created_by before insert on public.payroll
+  for each row execute function public.set_created_by();
+drop trigger if exists files_created_by on public.files;
+create trigger files_created_by before insert on public.files
+  for each row execute function public.set_created_by();
+
+alter table public.finance_entries enable row level security;
+alter table public.payroll         enable row level security;
+alter table public.files           enable row level security;
+drop policy if exists "finance_entries admin" on public.finance_entries;
+drop policy if exists "payroll admin"         on public.payroll;
+drop policy if exists "files admin"           on public.files;
+create policy "finance_entries admin" on public.finance_entries for all to authenticated
+  using (public.is_leader()) with check (public.is_leader());
+create policy "payroll admin" on public.payroll for all to authenticated
+  using (public.is_leader()) with check (public.is_leader());
+create policy "files admin" on public.files for all to authenticated
+  using (public.is_leader()) with check (public.is_leader());
+
+-- ── Storage: хувийн bucket (50MB хүртэл файл). Зөвхөн админ уншиж, бичнэ ──
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('zuca-files', 'zuca-files', false, 52428800)
+on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit;
+
+drop policy if exists "zuca-files admin select" on storage.objects;
+drop policy if exists "zuca-files admin insert" on storage.objects;
+drop policy if exists "zuca-files admin update" on storage.objects;
+drop policy if exists "zuca-files admin delete" on storage.objects;
+create policy "zuca-files admin select" on storage.objects for select to authenticated
+  using (bucket_id = 'zuca-files' and public.is_leader());
+create policy "zuca-files admin insert" on storage.objects for insert to authenticated
+  with check (bucket_id = 'zuca-files' and public.is_leader());
+create policy "zuca-files admin update" on storage.objects for update to authenticated
+  using (bucket_id = 'zuca-files' and public.is_leader());
+create policy "zuca-files admin delete" on storage.objects for delete to authenticated
+  using (bucket_id = 'zuca-files' and public.is_leader());
+
+do $$ begin
+  alter publication supabase_realtime add table public.finance_entries;
+exception when others then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.payroll;
+exception when others then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.files;
+exception when others then null; end $$;

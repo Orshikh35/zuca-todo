@@ -12,16 +12,21 @@ import type {
   DailyReportInput,
   Department,
   DepartmentInput,
+  FileFolder,
+  FinanceEntry,
+  Payroll,
   Profile,
   ProfileInput,
   Project,
   ProjectInput,
   Rows,
+  StoredFile,
   TableName,
   Task,
   TaskInput,
 } from "../types";
 import { canSeeTask, isAdmin } from "../permissions";
+import { uid } from "../utils";
 import { createDemoRepo } from "./demo-repo";
 import type { Repo } from "./repo";
 import { createSupabaseRepo } from "./supabase-repo";
@@ -73,6 +78,10 @@ interface Store {
   projectById: Map<string, Project>;
   /** Төслийн явц: дууссан / нийт ажил */
   projectProgress(id: string): ProjectProgress;
+  /** Санхүү, цалин, файл — зөвхөн админд (бусдад хоосон) */
+  financeEntries: FinanceEntry[];
+  payroll: Payroll[];
+  files: StoredFile[];
 
   createProfile(input: ProfileInput): Promise<Profile | undefined>;
   updateProfile(id: string, patch: Partial<Profile>): Promise<void>;
@@ -92,6 +101,17 @@ interface Store {
   updateProject(id: string, patch: Partial<Project>): Promise<void>;
   /** Төслийг устгана — ажлууд нь устахгүй, зөвхөн төслөөс салгана */
   deleteProject(id: string): Promise<void>;
+  createEntry(input: Partial<FinanceEntry>): Promise<FinanceEntry | undefined>;
+  updateEntry(id: string, patch: Partial<FinanceEntry>): Promise<void>;
+  deleteEntry(id: string): Promise<void>;
+  savePayroll(input: Partial<Payroll> & { profile_id: string; month: string }): Promise<Payroll | undefined>;
+  deletePayroll(id: string): Promise<void>;
+  /** Файлуудыг хадгалж, «files» хүснэгтэд бүртгэнэ. Амжилттай хадгалсан тоог буцаана */
+  uploadFiles(list: File[], meta: { folder: FileFolder; entry_id?: string | null; profile_id?: string | null }): Promise<number>;
+  /** Шинэ tab-д нээнэ, эсвэл download=true бол татна */
+  openFile(f: StoredFile, download?: boolean): Promise<void>;
+  updateFile(id: string, patch: Partial<StoredFile>): Promise<void>;
+  deleteFile(f: StoredFile): Promise<void>;
   createApproval(input: ApprovalInput): Promise<Approval | undefined>;
   updateApproval(id: string, patch: Partial<Approval>): Promise<void>;
   deleteApproval(id: string): Promise<void>;
@@ -123,6 +143,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [camps, setCamps] = useState<Camp[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [financeEntries, setFinanceEntries] = useState<FinanceEntry[]>([]);
+  const [payroll, setPayroll] = useState<Payroll[]>([]);
+  const [files, setFiles] = useState<StoredFile[]>([]);
   const [projectCounts, setProjectCounts] = useState<Record<string, { total: number; done: number }>>({});
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
@@ -140,7 +163,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Нэг query унасан ч бусад нь ачаалагдана. Ялангуяа `me` тогтоогдохгүй бол
   // Shell /login руу шидэж, middleware буцаагаад эцэс төгсгөлгүй гогцоо үүснэ.
   const refresh = useCallback(async () => {
-    const [u, p, t, c, d, a, r, g, pj, pc] = await Promise.allSettled([
+    const [u, p, t, c, d, a, r, g, pj, pc, fe, pr, fl] = await Promise.allSettled([
       repo.currentUser(),
       repo.listProfiles(),
       repo.listTasks(),
@@ -151,6 +174,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       repo.list("agent_runs"),
       repo.list("projects"),
       repo.projectProgress(),
+      // Ажилтанд RLS хоосон буцаана
+      repo.list("finance_entries"),
+      repo.list("payroll"),
+      repo.list("files"),
     ]);
     if (u.status === "fulfilled") setMe(u.value);
     if (p.status === "fulfilled") setProfiles(p.value);
@@ -162,6 +189,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (g.status === "fulfilled") setAgentRuns(g.value);
     if (pj.status === "fulfilled") setProjects(pj.value);
     if (pc.status === "fulfilled") setProjectCounts(pc.value);
+    if (fe.status === "fulfilled") setFinanceEntries(fe.value);
+    if (pr.status === "fulfilled") setPayroll(pr.value);
+    if (fl.status === "fulfilled") setFiles(fl.value);
 
     // projects (v7) хүснэгт үүсээгүй байсан ч бусад хуудас ажилласаар байна
     const failed = [u, p, t, c, d, a, r, g].find((x) => x.status === "rejected");
@@ -224,6 +254,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const apprCrud = crud("approvals", setApprovals);
     const dailyCrud = crud("daily_reports", setDailyReports);
     const projCrud = crud("projects", setProjects);
+    const entryCrud = crud("finance_entries", setFinanceEntries);
+    const payCrud = crud("payroll", setPayroll);
+    const fileCrud = crud("files", setFiles);
+    const admin = isAdmin(me);
 
     // Ажилтан зөвхөн өөрийн + эзэнгүй ажлыг харна (Supabase дээр RLS давхар хамгаална; demo горимд энд шүүнэ)
     const visibleTasks = isAdmin(me) ? tasks : tasks.filter((t) => canSeeTask(me, t));
@@ -259,6 +293,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       projects,
       projectById,
       projectProgress,
+      // demo горимд RLS байхгүй тул энд давхар хаана
+      financeEntries: admin ? financeEntries : [],
+      payroll: admin ? payroll : [],
+      files: admin ? files : [],
 
       async createProfile(input) {
         try {
@@ -416,6 +454,85 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         toast("Төсөл устгагдлаа — ажлууд нь хэвээр үлдлээ");
       },
 
+      async createEntry(input) {
+        const e = await entryCrud.create(input);
+        if (e) toast(e.kind === "income" ? "Орлого бүртгэгдлээ" : "Зардал бүртгэгдлээ");
+        return e;
+      },
+      updateEntry: entryCrud.update,
+      async deleteEntry(id) {
+        setFiles((prev) => prev.map((f) => (f.entry_id === id ? { ...f, entry_id: null } : f)));
+        await entryCrud.remove(id);
+        toast("Устгагдлаа");
+      },
+      async savePayroll(input) {
+        const existing = payroll.find((p) => p.profile_id === input.profile_id && p.month === input.month);
+        if (existing) {
+          await payCrud.update(existing.id, input);
+          return { ...existing, ...input };
+        }
+        return payCrud.create(input);
+      },
+      deletePayroll: payCrud.remove,
+
+      async uploadFiles(list, meta) {
+        let ok = 0;
+        for (const file of list) {
+          // Storage-ийн түлхүүрт кирилл үсэг ордоггүй — жинхэнэ нэрийг хүснэгтэд хадгална
+          const ext = (file.name.match(/\.([a-z0-9]{1,8})$/i)?.[1] ?? "").toLowerCase();
+          const path = `${meta.folder}/${uid()}${ext ? `.${ext}` : ""}`;
+          try {
+            await repo.uploadFile(path, file);
+          } catch (e) {
+            toast(`${file.name}: ${e instanceof Error ? e.message : "хадгалж чадсангүй"}`, "error");
+            continue;
+          }
+          try {
+            const row = await repo.insert("files", {
+              name: file.name,
+              path,
+              size: file.size,
+              mime: file.type || null,
+              folder: meta.folder,
+              entry_id: meta.entry_id ?? null,
+              profile_id: meta.profile_id ?? null,
+            });
+            setFiles((prev) => [row, ...prev]);
+            ok++;
+          } catch (e) {
+            void repo.removeFileObject(path).catch(() => {});
+            fail(e);
+          }
+        }
+        if (ok) toast(`${ok} файл хадгалагдлаа`);
+        return ok;
+      },
+      async openFile(f, download) {
+        // Popup blocker-оос сэргийлж tab-ыг шууд нээгээд, холбоос бэлэн болмогц шилжүүлнэ
+        const win = download ? null : window.open("", "_blank");
+        try {
+          let url = await repo.fileUrl(f.path, download ? f.name : undefined);
+          if (url.startsWith("data:")) url = URL.createObjectURL(await (await fetch(url)).blob());
+          if (download || !win) {
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = f.name;
+            a.click();
+          } else {
+            win.location.href = url;
+          }
+        } catch (e) {
+          win?.close();
+          fail(e);
+        }
+      },
+      updateFile: fileCrud.update,
+      async deleteFile(f) {
+        await fileCrud.remove(f.id);
+        void repo.removeFileObject(f.path).catch(() => {});
+        toast(`«${f.name}» устгагдлаа`);
+      },
+
       async createApproval(input) {
         const a = await apprCrud.create({ status: "pending", ...input });
         if (a) toast("Хүсэлт илгээгдлээ");
@@ -454,7 +571,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       toast,
       dismissToast,
     };
-  }, [repo, ready, me, profiles, tasks, camps, departments, projects, projectCounts, approvals, dailyReports, agentRuns, toasts, toast, dismissToast, refresh, fail]);
+  }, [repo, ready, me, profiles, tasks, camps, departments, projects, projectCounts, financeEntries, payroll, files, approvals, dailyReports, agentRuns, toasts, toast, dismissToast, refresh, fail]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

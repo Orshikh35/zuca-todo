@@ -11,22 +11,24 @@ export function BarList({
   rows,
   unit = "",
   empty = "Өгөгдөл алга",
+  format = String,
 }: {
   rows: { label: string; value: number; color?: string; hint?: string; extra?: string }[];
   unit?: string;
   empty?: string;
+  format?: (v: number) => string;
 }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   if (!rows.length) return <p className="py-6 text-center text-sm text-zinc-400">{empty}</p>;
   return (
     <ul className="space-y-2.5">
       {rows.map((r) => (
-        <li key={r.label} className="group" title={`${r.label}: ${r.value}${unit}${r.hint ? ` · ${r.hint}` : ""}`}>
+        <li key={r.label} className="group" title={`${r.label}: ${format(r.value)}${unit}${r.hint ? ` · ${r.hint}` : ""}`}>
           <div className="mb-1 flex items-baseline justify-between gap-3 text-[13px]">
             <span className="truncate text-zinc-700">{r.label}</span>
             <span className="tabular shrink-0 font-semibold text-zinc-900">
               {r.extra && <span className="mr-2 text-xs font-normal text-zinc-400">{r.extra}</span>}
-              {r.value}
+              {format(r.value)}
               {unit && <span className="ml-0.5 font-normal text-zinc-400">{unit}</span>}
             </span>
           </div>
@@ -47,14 +49,20 @@ export function ColumnChart({
   buckets,
   series,
   height = 220,
+  format,
+  axisWidth = 28,
 }: {
   buckets: { label: string; full: string; values: number[] }[];
   series: { name: string; color: string }[];
   height?: number;
+  /** Мөнгөн дүн гэх мэт том тоонд: тэнхлэг, tooltip-ийн бичлэг */
+  format?: (v: number) => string;
+  axisWidth?: number;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(1, ...buckets.flatMap((b) => b.values));
-  const niceMax = Math.max(4, Math.ceil(max / 4) * 4);
+  const niceMax = format ? niceCeil(max) : Math.max(4, Math.ceil(max / 4) * 4);
+  const fmt = format ?? String;
   const ticks = [0, 1, 2, 3, 4].map((i) => (niceMax / 4) * i);
 
   return (
@@ -71,10 +79,10 @@ export function ColumnChart({
 
       <div className="relative flex" style={{ height }}>
         {/* Y тэнхлэг */}
-        <div className="tabular relative w-7 shrink-0 text-[10px] text-zinc-400">
+        <div className="tabular relative shrink-0 text-[10px] text-zinc-400" style={{ width: axisWidth }}>
           {ticks.map((t) => (
             <span key={t} className="absolute right-2" style={{ bottom: `${(t / niceMax) * 100}%`, transform: "translateY(50%)" }}>
-              {t}
+              {fmt(t)}
             </span>
           ))}
         </div>
@@ -112,7 +120,7 @@ export function ColumnChart({
                       <div key={s.name} className="flex items-center gap-1.5">
                         <span className="size-2 rounded-sm" style={{ background: s.color }} />
                         <span className="flex-1">{s.name}</span>
-                        <span className="tabular font-semibold">{b.values[si]}</span>
+                        <span className="tabular font-semibold">{fmt(b.values[si])}</span>
                       </div>
                     ))}
                   </div>
@@ -123,7 +131,7 @@ export function ColumnChart({
         </div>
       </div>
       {/* X тэнхлэг */}
-      <div className="ml-7 flex">
+      <div className="flex" style={{ marginLeft: axisWidth }}>
         {buckets.map((b, i) => (
           <div
             key={b.full}
@@ -139,6 +147,14 @@ export function ColumnChart({
       </div>
     </div>
   );
+}
+
+/** 4 хуваахад «гоё» тоо гарах дээд хязгаар: 1 · 2 · 2.5 · 5 × 10^n */
+function niceCeil(max: number) {
+  const raw = max / 4;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag;
+  return step * 4;
 }
 
 /* ─────────── Stacked segment bar ─────────── */

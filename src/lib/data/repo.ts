@@ -36,6 +36,12 @@ export interface Repo {
    */
   projectProgress(): Promise<Record<string, { total: number; done: number }>>;
 
+  /** Файлын агуулга (Supabase Storage, demo-д localStorage). Мэдээлэл нь «files» хүснэгтэд */
+  uploadFile(path: string, file: File): Promise<void>;
+  /** Түр хугацааны холбоос. downloadAs өгвөл тэр нэрээр татагдана */
+  fileUrl(path: string, downloadAs?: string): Promise<string>;
+  removeFileObject(path: string): Promise<void>;
+
   /** Бусдын өөрчлөлтийг сонсох. Буцаах функц нь unsubscribe. */
   subscribe(onChange: () => void): () => void;
 }
