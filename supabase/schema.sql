@@ -885,3 +885,170 @@ exception when others then null; end $$;
 do $$ begin
   alter publication supabase_realtime add table public.files;
 exception when others then null; end $$;
+
+-- ═════════════════════════ v9: Санааны самбар (FigJam шиг наалт + emoji) ═════════════════════════
+-- Баг бүхэлдээ санаагаа нэргүйгээр наалт дээр бичиж, хаана ч чирж байрлуулна. Бусад нь стикер наагаад сэтгэгдэл бичнэ.
+
+create table if not exists public.ideas (
+  id          uuid primary key default gen_random_uuid(),
+  body        text not null default '',
+  color       text not null default 'yellow',
+  x           integer not null default 0,
+  y           integer not null default 0,
+  created_by  uuid references public.profiles (id) on delete set null,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+-- Сэтгэгдэл (FigJam шиг): thread_id-гүй мөр нь самбарт тавьсан бөмбөлөг — x, y байрлалтай,
+-- idea_id байвал тэр наалт дээр. Хариултууд thread_id-аар холбогдоно. Апп дээр бичсэн хүн нэргүй харагдана.
+create table if not exists public.idea_comments (
+  id          uuid primary key default gen_random_uuid(),
+  idea_id     uuid references public.ideas (id) on delete cascade,
+  thread_id   uuid references public.idea_comments (id) on delete cascade,
+  x           integer not null default 0,
+  y           integer not null default 0,
+  body        text not null check (char_length(body) between 1 and 2000),
+  created_by  uuid references public.profiles (id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+-- Өмнөх хувилбараас шилжих (сэтгэгдэл заавал санаатай байсан)
+alter table public.idea_comments alter column idea_id drop not null;
+alter table public.idea_comments add column if not exists thread_id uuid references public.idea_comments (id) on delete cascade;
+alter table public.idea_comments add column if not exists x integer not null default 0;
+alter table public.idea_comments add column if not exists y integer not null default 0;
+create index if not exists idea_comments_idea_idx on public.idea_comments (idea_id, created_at);
+create index if not exists idea_comments_thread_idx on public.idea_comments (thread_id, created_at);
+
+drop trigger if exists ideas_touch on public.ideas;
+create trigger ideas_touch before update on public.ideas
+  for each row execute function public.touch_updated_at();
+drop trigger if exists ideas_created_by on public.ideas;
+create trigger ideas_created_by before insert on public.ideas
+  for each row execute function public.set_created_by();
+drop trigger if exists idea_comments_touch on public.idea_comments;
+create trigger idea_comments_touch before update on public.idea_comments
+  for each row execute function public.touch_updated_at();
+drop trigger if exists idea_comments_created_by on public.idea_comments;
+create trigger idea_comments_created_by before insert on public.idea_comments
+  for each row execute function public.set_created_by();
+
+-- Наалтыг хэн ч чирж, өнгийг нь сольж болно. Харин бичвэр, зохиогчийг зөвхөн зохиогч (эсвэл админ) өөрчилнө.
+create or replace function public.guard_idea()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if (new.body is distinct from old.body or new.created_by is distinct from old.created_by)
+     and old.created_by is distinct from public.my_profile_id() and not public.is_leader() then
+    raise exception 'Бусдын санааг засах эрхгүй';
+  end if;
+  return new;
+end $$;
+drop trigger if exists ideas_guard on public.ideas;
+create trigger ideas_guard before update on public.ideas
+  for each row execute function public.guard_idea();
+
+alter table public.ideas          enable row level security;
+alter table public.idea_comments  enable row level security;
+drop policy if exists "ideas read"   on public.ideas;
+drop policy if exists "ideas insert" on public.ideas;
+drop policy if exists "ideas update" on public.ideas;
+drop policy if exists "ideas delete" on public.ideas;
+create policy "ideas read"   on public.ideas for select to authenticated using (true);
+create policy "ideas insert" on public.ideas for insert to authenticated with check (true);
+create policy "ideas update" on public.ideas for update to authenticated using (true) with check (true);
+create policy "ideas delete" on public.ideas for delete to authenticated
+  using (created_by = public.my_profile_id() or public.is_leader());
+
+drop policy if exists "idea_comments read"   on public.idea_comments;
+drop policy if exists "idea_comments insert" on public.idea_comments;
+drop policy if exists "idea_comments update" on public.idea_comments;
+drop policy if exists "idea_comments delete" on public.idea_comments;
+create policy "idea_comments read"   on public.idea_comments for select to authenticated using (true);
+create policy "idea_comments insert" on public.idea_comments for insert to authenticated
+  with check (created_by = public.my_profile_id());
+create policy "idea_comments update" on public.idea_comments for update to authenticated
+  using (created_by = public.my_profile_id()) with check (created_by = public.my_profile_id());
+create policy "idea_comments delete" on public.idea_comments for delete to authenticated
+  using (created_by = public.my_profile_id() or public.is_leader());
+
+do $$ begin
+  alter publication supabase_realtime add table public.ideas;
+exception when others then null; end $$;
+do $$ begin
+  alter publication supabase_realtime add table public.idea_comments;
+exception when others then null; end $$;
+
+-- ── Emoji стикер: самбарын хаана ч наана. Наалт дээр наавал түүнтэй хамт хөдөлнө ──
+create table if not exists public.idea_stickers (
+  id          uuid primary key default gen_random_uuid(),
+  emoji       text not null check (char_length(emoji) between 1 and 16),
+  x           integer not null default 0,
+  y           integer not null default 0,
+  idea_id     uuid references public.ideas (id) on delete cascade,   -- null бол самбар дээр чөлөөтэй
+  created_by  uuid references public.profiles (id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists idea_stickers_idea_idx on public.idea_stickers (idea_id);
+
+drop trigger if exists idea_stickers_touch on public.idea_stickers;
+create trigger idea_stickers_touch before update on public.idea_stickers
+  for each row execute function public.touch_updated_at();
+drop trigger if exists idea_stickers_created_by on public.idea_stickers;
+create trigger idea_stickers_created_by before insert on public.idea_stickers
+  for each row execute function public.set_created_by();
+
+alter table public.idea_stickers enable row level security;
+drop policy if exists "idea_stickers read"   on public.idea_stickers;
+drop policy if exists "idea_stickers insert" on public.idea_stickers;
+drop policy if exists "idea_stickers update" on public.idea_stickers;
+drop policy if exists "idea_stickers delete" on public.idea_stickers;
+-- Хүн бүр өөрийн стикерийг л зөөж, устгана (админ бүгдийг)
+create policy "idea_stickers read"   on public.idea_stickers for select to authenticated using (true);
+create policy "idea_stickers insert" on public.idea_stickers for insert to authenticated
+  with check (created_by = public.my_profile_id());
+create policy "idea_stickers update" on public.idea_stickers for update to authenticated
+  using (created_by = public.my_profile_id() or public.is_leader());
+create policy "idea_stickers delete" on public.idea_stickers for delete to authenticated
+  using (created_by = public.my_profile_id() or public.is_leader());
+
+do $$ begin
+  alter publication supabase_realtime add table public.idea_stickers;
+exception when others then null; end $$;
+
+-- ── Үзгээр зурсан зураас ──
+create table if not exists public.idea_strokes (
+  id          uuid primary key default gen_random_uuid(),
+  points      jsonb not null default '[]',                  -- [[x, y], ...] самбарын координат
+  color       text not null default 'ink',
+  width       integer not null default 4 check (width between 1 and 40),
+  created_by  uuid references public.profiles (id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+drop trigger if exists idea_strokes_touch on public.idea_strokes;
+create trigger idea_strokes_touch before update on public.idea_strokes
+  for each row execute function public.touch_updated_at();
+drop trigger if exists idea_strokes_created_by on public.idea_strokes;
+create trigger idea_strokes_created_by before insert on public.idea_strokes
+  for each row execute function public.set_created_by();
+
+alter table public.idea_strokes enable row level security;
+drop policy if exists "idea_strokes read"   on public.idea_strokes;
+drop policy if exists "idea_strokes insert" on public.idea_strokes;
+drop policy if exists "idea_strokes update" on public.idea_strokes;
+drop policy if exists "idea_strokes delete" on public.idea_strokes;
+-- Хүн бүр өөрийн зураасыг л арилгана (админ бүгдийг)
+create policy "idea_strokes read"   on public.idea_strokes for select to authenticated using (true);
+create policy "idea_strokes insert" on public.idea_strokes for insert to authenticated
+  with check (created_by = public.my_profile_id());
+create policy "idea_strokes update" on public.idea_strokes for update to authenticated
+  using (created_by = public.my_profile_id());
+create policy "idea_strokes delete" on public.idea_strokes for delete to authenticated
+  using (created_by = public.my_profile_id() or public.is_leader());
+
+do $$ begin
+  alter publication supabase_realtime add table public.idea_strokes;
+exception when others then null; end $$;

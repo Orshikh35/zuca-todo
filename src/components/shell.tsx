@@ -10,6 +10,7 @@ import {
   ChevronsUpDown,
   FolderKanban,
   LayoutGrid,
+  Lightbulb,
   Loader2,
   LogOut,
   Menu,
@@ -100,6 +101,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { href: "/projects", label: "Төслүүд", short: "Төсөл", icon: FolderKanban, badge: store.projects.filter((p) => p.status === "active").length || undefined, tone: "bg-zinc-200 text-zinc-700" },
     { href: "/calendar", label: "Календарь", short: "Календарь", icon: CalendarDays },
     { href: "/plan", label: "Төлөвлөгөө", short: "Төлөвлөгөө", icon: CalendarRange },
+    { href: "/ideas", label: "Санаа", short: "Санаа", icon: Lightbulb },
     { href: "/camps", label: "Зуслангууд", short: "Зуслан", icon: Tent, badge: lead ? incomplete : undefined, tone: "bg-amber-400 text-amber-950", mobile: true },
     ...(lead
       ? [
@@ -115,13 +117,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const roleLabel = `${ROLES.find((r) => r.id === me.role)?.label ?? ""}${myDept ? ` · ${myDept.name}` : ""}`;
 
   const groups: { title: string; items: NavItem[] }[] = [
-    { title: "Ажил", items: nav.filter((n) => ["/", "/chat", "/tasks", "/projects", "/calendar", "/plan", "/camps"].includes(n.href)) },
+    { title: "Ажил", items: nav.filter((n) => ["/", "/chat", "/tasks", "/projects", "/calendar", "/plan", "/ideas", "/camps"].includes(n.href)) },
     ...(lead || admin ? [{ title: "Удирдлага", items: nav.filter((n) => ["/team", "/reports", "/finance"].includes(n.href)) }] : []),
     { title: "Туслах", items: nav.filter((n) => n.href === "/agent") },
   ];
 
   return (
-    <div className="min-h-dvh">
+    // --sidebar-w: хажуугийн цэсний эзлэх зай (left-3 + өргөн) — бүтэн дэлгэцийн хуудсууд агуулгаа үүнээс баруунд эхлүүлнэ
+    <div className="min-h-dvh" style={{ "--sidebar-w": collapsed ? "88px" : "260px" } as React.CSSProperties}>
       {/* ── Desktop: хажуугийн цэс ── */}
       <aside
         className={cn(

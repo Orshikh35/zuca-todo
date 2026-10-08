@@ -204,6 +204,10 @@ export function createSupabaseRepo(): Repo {
         .on("postgres_changes", { event: "*", schema: "public", table: "files" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "approvals" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "daily_reports" }, debounced)
+        .on("postgres_changes", { event: "*", schema: "public", table: "ideas" }, debounced)
+        .on("postgres_changes", { event: "*", schema: "public", table: "idea_comments" }, debounced)
+        .on("postgres_changes", { event: "*", schema: "public", table: "idea_stickers" }, debounced)
+        .on("postgres_changes", { event: "*", schema: "public", table: "idea_strokes" }, debounced)
         .subscribe();
       return () => {
         clearTimeout(timer);

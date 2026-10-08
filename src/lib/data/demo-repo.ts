@@ -2,7 +2,7 @@
  * Demo горим: Supabase тохируулаагүй үед browser-ийн localStorage дээр ажиллана.
  */
 import { SEED_CAMPS, SEED_PEOPLE, SEED_TASKS } from "../seed-data";
-import type { AgentRun, Approval, Camp, DailyReport, Department, FinanceEntry, Payroll, Profile, ProfileInput, Project, Rows, StoredFile, TableName, Task } from "../types";
+import type { AgentRun, Approval, Camp, DailyReport, Department, FinanceEntry, Idea, IdeaComment, IdeaSticker, IdeaStroke, Payroll, Profile, ProfileInput, Project, Rows, StoredFile, TableName, Task } from "../types";
 import { addDays, toISODate, uid } from "../utils";
 import type { Repo } from "./repo";
 
@@ -20,10 +20,17 @@ interface DB {
   approvals: Approval[];
   daily_reports: DailyReport[];
   agent_runs: AgentRun[];
+  ideas: Idea[];
+  idea_comments: IdeaComment[];
+  idea_stickers: IdeaSticker[];
+  idea_strokes: IdeaStroke[];
   session: string | null;
 }
 
 const nowISO = () => new Date().toISOString();
+/** Хуучин demo сэтгэгдлийн бөмбөлгийн байрлал (наалт дээр) */
+const NOTE_PIN_X = 200;
+const NOTE_PIN_Y = 150;
 const addMonthsKey = (n: number) => {
   const d = new Date();
   d.setDate(1);
@@ -270,7 +277,7 @@ export function buildSeed(): DB {
 
   const { finance_entries, payroll } = seedFinance(profiles, departments, projects);
 
-  return { profiles, tasks, camps, departments, projects, finance_entries, payroll, files: [], approvals, daily_reports, agent_runs: [], session: null };
+  return { profiles, tasks, camps, departments, projects, finance_entries, payroll, files: [], approvals, daily_reports, agent_runs: [], ...seedIdeas(profiles), session: null };
 }
 
 /** Жишээ санхүү: сүүлийн 6 сарын цалин, зардал, орлого */
@@ -399,6 +406,60 @@ function seedProjects(profiles: Profile[], tasks: Task[]): Project[] {
   return [project];
 }
 
+function seedIdeas(profiles: Profile[]): Pick<DB, "ideas" | "idea_comments" | "idea_stickers" | "idea_strokes"> {
+  const [a, b, c] = profiles;
+  const idea = (body: string, color: string, x: number, y: number, by?: Profile, ago = 1): Idea => ({
+    id: uid(),
+    body,
+    color,
+    x,
+    y,
+    created_by: by?.id ?? null,
+    created_at: daysAgo(ago),
+    updated_at: daysAgo(ago),
+  });
+  const ideas = [
+    idea("Зуслан бүрт 360° виртуал аялал хийвэл захиалга нэмэгдэх байх 🏕️", "yellow", 60, 50, a, 3),
+    idea("Эцэг эхчүүдэд долоо хоног бүр хүүхдийнх нь зурагтай мэдээ илгээх", "pink", 340, 110, b, 2),
+    idea("Telegram bot-оор зуслангийн сул орны тоог шууд харуулах", "blue", 120, 300, c, 1),
+    idea("Зуны улирлын өмнө багийн hackathon 🚀", "green", 420, 360, a, 0),
+  ];
+  const comment = (p: Profile | undefined, body: string, at: Partial<IdeaComment>, ago = 0): IdeaComment =>
+    ({ id: uid(), idea_id: null, thread_id: null, x: 0, y: 0, body, created_by: p?.id ?? null, created_at: daysAgo(ago), updated_at: daysAgo(ago), ...at });
+  const root = comment(b, "Гоё санаа! Дроноор зураг авбал бүр гоё болно", { idea_id: ideas[0].id, x: 212, y: 120 }, 2);
+  const free = comment(c, "Энэ хэсгийг дараагийн уулзалтаар ярилцъя ☕", { x: 640, y: 300 }, 1);
+  const sticker = (i: number | null, p: Profile | undefined, emoji: string, x: number, y: number): IdeaSticker[] =>
+    p ? [{ id: uid(), emoji, x, y, idea_id: i === null ? null : ideas[i].id, created_by: p.id, created_at: daysAgo(0), updated_at: daysAgo(0) }] : [];
+  return {
+    ideas,
+    idea_comments: [
+      root,
+      comment(c, "Эхлээд 3 зуслан дээр туршиж үзье", { thread_id: root.id }, 1),
+      comment(a, "Тийм ээ, би хариуцъя 🙌", { thread_id: root.id }),
+      free,
+    ],
+    idea_strokes: [
+      {
+        id: uid(),
+        points: [[300, 250], [330, 262], [360, 270], [392, 272], [420, 268], [440, 262]],
+        color: "#ef4444",
+        width: 4,
+        created_by: a?.id ?? null,
+        created_at: daysAgo(0),
+        updated_at: daysAgo(0),
+      },
+    ],
+    idea_stickers: [
+      ...sticker(0, b, "💯", 195, 6),
+      ...sticker(0, c, "🔥", 150, 2),
+      ...sticker(1, a, "СУПЕР!", 170, 8),
+      ...sticker(2, b, "🤔", 200, 4),
+      ...sticker(3, c, "🚀", 196, 2),
+      ...sticker(null, a, "🎉", 660, 100),
+    ],
+  };
+}
+
 /** Хуучин demo өгөгдлийг шинэ бүтцэд оруулна (хэлтэсгүй хувилбараас) */
 function migrate(d: DB): DB {
   if (!d.departments) {
@@ -413,6 +474,17 @@ function migrate(d: DB): DB {
   // v8: санхүү, файл
   if (!d.finance_entries) Object.assign(d, seedFinance(d.profiles, d.departments, d.projects));
   d.files ??= [];
+  // v9: санааны самбар
+  if (!d.ideas) Object.assign(d, seedIdeas(d.profiles));
+  d.idea_stickers ??= [];
+  d.idea_comments ??= [];
+  d.idea_strokes ??= [];
+  // Хуучин (санаанд заавал хамаарах) сэтгэгдлийг наалтын баруун доод буланд бөмбөлөг болгоно
+  d.idea_comments.forEach((c) => {
+    c.thread_id ??= null;
+    c.x ??= NOTE_PIN_X;
+    c.y ??= NOTE_PIN_Y;
+  });
   d.profiles.forEach((p) => {
     p.department_id ??= null;
     p.telegram_chat_id ??= null;
@@ -530,6 +602,10 @@ export function createDemoRepo(): Repo {
       d.payroll = d.payroll.filter((x) => x.profile_id !== id);
       d.files.forEach((f) => f.profile_id === id && (f.profile_id = null));
       d.finance_entries.forEach((e) => e.profile_id === id && (e.profile_id = null));
+      d.ideas.forEach((x) => x.created_by === id && (x.created_by = null));
+      d.idea_comments = d.idea_comments.filter((x) => x.created_by !== id);
+      d.idea_strokes = d.idea_strokes.filter((x) => x.created_by !== id);
+      d.idea_stickers = d.idea_stickers.filter((x) => x.created_by !== id);
       commit();
     },
 
@@ -681,6 +757,12 @@ export function createDemoRepo(): Repo {
         d.finance_entries.forEach((e) => e.project_id === id && (e.project_id = null));
       }
       if (table === "finance_entries") d.files.forEach((f) => f.entry_id === id && (f.entry_id = null));
+      if (table === "idea_comments") d.idea_comments = d.idea_comments.filter((x) => x.thread_id !== id);
+      if (table === "ideas") {
+        const roots = new Set(d.idea_comments.filter((x) => x.idea_id === id).map((x) => x.id));
+        d.idea_comments = d.idea_comments.filter((x) => x.idea_id !== id && !(x.thread_id && roots.has(x.thread_id)));
+        d.idea_stickers = d.idea_stickers.filter((x) => x.idea_id !== id);
+      }
       commit();
     },
 

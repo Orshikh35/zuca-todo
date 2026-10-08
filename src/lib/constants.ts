@@ -140,3 +140,76 @@ export const FILE_FOLDERS: { id: FileFolder; label: string; emoji: string }[] = 
   { id: "reports", label: "Тайлан", emoji: "📊" },
   { id: "other", label: "Бусад", emoji: "📁" },
 ];
+
+/** Санааны наалтын өнгө (FigJam шиг пастель — dark горимд ч бараан бичигтэй) */
+export const IDEA_COLORS: { id: string; label: string; bg: string; edge: string }[] = [
+  { id: "yellow", label: "Шар", bg: "#fff1a8", edge: "#f5d63d" },
+  { id: "pink", label: "Ягаан", bg: "#ffd3e4", edge: "#f78fb3" },
+  { id: "green", label: "Ногоон", bg: "#cdf5d6", edge: "#6fd38a" },
+  { id: "blue", label: "Цэнхэр", bg: "#cfe6ff", edge: "#74b0f7" },
+  { id: "purple", label: "Ягаан-цэнхэр", bg: "#e3d9ff", edge: "#a48cf5" },
+  { id: "orange", label: "Улбар шар", bg: "#ffdcc2", edge: "#f8a26a" },
+];
+
+/** Самбарт наах emoji стикер — эхний IDEA_EMOJIS_PINNED нь доод мөрөнд шууд, бусад нь «Бусад» цэсэнд */
+export const IDEA_EMOJIS: { emoji: string; label: string }[] = [
+  { emoji: "💯", label: "100 хувь" },
+  { emoji: "🔥", label: "Гал авалцсан" },
+  { emoji: "❤️", label: "Зүрх" },
+  { emoji: "🚀", label: "Пуужин" },
+  { emoji: "🤩", label: "Гайхалтай" },
+  { emoji: "👏", label: "Алга ташилт" },
+  { emoji: "😂", label: "Инээд" },
+  { emoji: "😡", label: "Уурласан" },
+  { emoji: "😍", label: "Дурласан" },
+  { emoji: "🥳", label: "Баяр" },
+  { emoji: "🎉", label: "Баярлалаа" },
+  { emoji: "🙌", label: "Тийм ээ" },
+  { emoji: "💪", label: "Дэмжинэ" },
+  { emoji: "👍", label: "Like" },
+  { emoji: "⭐", label: "Од" },
+  { emoji: "💎", label: "Үнэт санаа" },
+  { emoji: "💡", label: "Санаа" },
+  { emoji: "🧠", label: "Ухаалаг" },
+  { emoji: "🎯", label: "Яг онож" },
+  { emoji: "👀", label: "Сонирхолтой" },
+  { emoji: "😮", label: "Вау" },
+  { emoji: "🤯", label: "Толгой эргэв" },
+  { emoji: "🤔", label: "Бодох юм байна" },
+  { emoji: "🥺", label: "Хөөрхөн" },
+  { emoji: "😢", label: "Гунигтай" },
+  { emoji: "😬", label: "Эргэлзээтэй" },
+  { emoji: "🙏", label: "Гуйя" },
+  { emoji: "☕", label: "Ярилцъя" },
+];
+export const IDEA_EMOJIS_PINNED = 7;
+
+/** Бичигтэй тамга (FigJam-ийн stamp шиг) — стикерийн утга нь бичвэр өөрөө */
+export const IDEA_STAMPS: { text: string; bg: string; fg: string }[] = [
+  { text: "СУПЕР!", bg: "#ec4899", fg: "#fff" },
+  { text: "100%", bg: "#10b981", fg: "#fff" },
+  { text: "+1", bg: "#3b82f6", fg: "#fff" },
+  { text: "ВАУ!", bg: "#f59e0b", fg: "#1c1917" },
+  { text: "ХИЙЕ!", bg: "#8b5cf6", fg: "#fff" },
+  { text: "ҮГҮЙ ээ", bg: "#ef4444", fg: "#fff" },
+];
+
+/** Сэтгэгдэл бичсэн хүний нэргүй хоч — санаа бүрт тогтмол */
+export const IDEA_ANIMALS: { emoji: string; name: string }[] = [
+  { emoji: "🦊", name: "Үнэг" },
+  { emoji: "🐻", name: "Баавгай" },
+  { emoji: "🐼", name: "Панда" },
+  { emoji: "🐯", name: "Бар" },
+  { emoji: "🦁", name: "Арслан" },
+  { emoji: "🐰", name: "Туулай" },
+  { emoji: "🐺", name: "Чоно" },
+  { emoji: "🦉", name: "Шар шувуу" },
+  { emoji: "🐧", name: "Оцон шувуу" },
+  { emoji: "🐨", name: "Коала" },
+  { emoji: "🐸", name: "Мэлхий" },
+  { emoji: "🦄", name: "Ганц эвэрт" },
+  { emoji: "🐬", name: "Далайн гахай" },
+  { emoji: "🐝", name: "Зөгий" },
+  { emoji: "🦒", name: "Анааш" },
+  { emoji: "🐙", name: "Наймаалж" },
+];

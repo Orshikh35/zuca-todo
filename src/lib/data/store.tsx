@@ -14,6 +14,10 @@ import type {
   DepartmentInput,
   FileFolder,
   FinanceEntry,
+  Idea,
+  IdeaComment,
+  IdeaSticker,
+  IdeaStroke,
   Payroll,
   Profile,
   ProfileInput,
@@ -82,6 +86,11 @@ interface Store {
   financeEntries: FinanceEntry[];
   payroll: Payroll[];
   files: StoredFile[];
+  /** Санааны самбар — баг бүхэлдээ харна */
+  ideas: Idea[];
+  ideaComments: IdeaComment[];
+  ideaStickers: IdeaSticker[];
+  ideaStrokes: IdeaStroke[];
 
   createProfile(input: ProfileInput): Promise<Profile | undefined>;
   updateProfile(id: string, patch: Partial<Profile>): Promise<void>;
@@ -112,6 +121,17 @@ interface Store {
   openFile(f: StoredFile, download?: boolean): Promise<void>;
   updateFile(id: string, patch: Partial<StoredFile>): Promise<void>;
   deleteFile(f: StoredFile): Promise<void>;
+  createIdea(input: Partial<Idea>): Promise<Idea | undefined>;
+  updateIdea(id: string, patch: Partial<Idea>): Promise<void>;
+  deleteIdea(id: string): Promise<void>;
+  createSticker(input: Partial<IdeaSticker>): Promise<IdeaSticker | undefined>;
+  updateSticker(id: string, patch: Partial<IdeaSticker>): Promise<void>;
+  deleteSticker(id: string): Promise<void>;
+  createComment(input: Partial<IdeaComment>): Promise<IdeaComment | undefined>;
+  /** Бөмбөлгийг устгавал хариултууд нь хамт устна */
+  deleteComment(id: string): Promise<void>;
+  createStroke(input: Partial<IdeaStroke>): Promise<IdeaStroke | undefined>;
+  deleteStroke(id: string): Promise<void>;
   createApproval(input: ApprovalInput): Promise<Approval | undefined>;
   updateApproval(id: string, patch: Partial<Approval>): Promise<void>;
   deleteApproval(id: string): Promise<void>;
@@ -146,6 +166,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [financeEntries, setFinanceEntries] = useState<FinanceEntry[]>([]);
   const [payroll, setPayroll] = useState<Payroll[]>([]);
   const [files, setFiles] = useState<StoredFile[]>([]);
+  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [ideaComments, setIdeaComments] = useState<IdeaComment[]>([]);
+  const [ideaStickers, setIdeaStickers] = useState<IdeaSticker[]>([]);
+  const [ideaStrokes, setIdeaStrokes] = useState<IdeaStroke[]>([]);
   const [projectCounts, setProjectCounts] = useState<Record<string, { total: number; done: number }>>({});
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
@@ -163,7 +187,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Нэг query унасан ч бусад нь ачаалагдана. Ялангуяа `me` тогтоогдохгүй бол
   // Shell /login руу шидэж, middleware буцаагаад эцэс төгсгөлгүй гогцоо үүснэ.
   const refresh = useCallback(async () => {
-    const [u, p, t, c, d, a, r, g, pj, pc, fe, pr, fl] = await Promise.allSettled([
+    const [u, p, t, c, d, a, r, g, pj, pc, fe, pr, fl, id, ir, is, ik] = await Promise.allSettled([
       repo.currentUser(),
       repo.listProfiles(),
       repo.listTasks(),
@@ -178,6 +202,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       repo.list("finance_entries"),
       repo.list("payroll"),
       repo.list("files"),
+      repo.list("ideas"),
+      repo.list("idea_comments"),
+      repo.list("idea_stickers"),
+      repo.list("idea_strokes"),
     ]);
     if (u.status === "fulfilled") setMe(u.value);
     if (p.status === "fulfilled") setProfiles(p.value);
@@ -192,6 +220,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (fe.status === "fulfilled") setFinanceEntries(fe.value);
     if (pr.status === "fulfilled") setPayroll(pr.value);
     if (fl.status === "fulfilled") setFiles(fl.value);
+    if (id.status === "fulfilled") setIdeas(id.value);
+    if (ir.status === "fulfilled") setIdeaComments(ir.value);
+    if (is.status === "fulfilled") setIdeaStickers(is.value);
+    if (ik.status === "fulfilled") setIdeaStrokes(ik.value);
 
     // projects (v7) хүснэгт үүсээгүй байсан ч бусад хуудас ажилласаар байна
     const failed = [u, p, t, c, d, a, r, g].find((x) => x.status === "rejected");
@@ -257,6 +289,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const entryCrud = crud("finance_entries", setFinanceEntries);
     const payCrud = crud("payroll", setPayroll);
     const fileCrud = crud("files", setFiles);
+    const ideaCrud = crud("ideas", setIdeas);
+    const stickerCrud = crud("idea_stickers", setIdeaStickers);
+    const commentCrud = crud("idea_comments", setIdeaComments);
+    const strokeCrud = crud("idea_strokes", setIdeaStrokes);
     const admin = isAdmin(me);
 
     // Ажилтан зөвхөн өөрийн + эзэнгүй ажлыг харна (Supabase дээр RLS давхар хамгаална; demo горимд энд шүүнэ)
@@ -297,6 +333,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       financeEntries: admin ? financeEntries : [],
       payroll: admin ? payroll : [],
       files: admin ? files : [],
+      ideas,
+      ideaComments,
+      ideaStickers,
+      ideaStrokes,
 
       async createProfile(input) {
         try {
@@ -533,6 +573,27 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         toast(`«${f.name}» устгагдлаа`);
       },
 
+      createIdea: ideaCrud.create,
+      updateIdea: ideaCrud.update,
+      async deleteIdea(id) {
+        setIdeaComments((prev) => {
+          const roots = new Set(prev.filter((c) => c.idea_id === id).map((c) => c.id));
+          return prev.filter((c) => c.idea_id !== id && !(c.thread_id && roots.has(c.thread_id)));
+        });
+        setIdeaStickers((prev) => prev.filter((x) => x.idea_id !== id));
+        await ideaCrud.remove(id);
+      },
+      createSticker: stickerCrud.create,
+      updateSticker: stickerCrud.update,
+      deleteSticker: stickerCrud.remove,
+      createComment: (input) => commentCrud.create({ created_by: me?.id ?? null, ...input }),
+      async deleteComment(id) {
+        setIdeaComments((prev) => prev.filter((c) => c.thread_id !== id));
+        await commentCrud.remove(id);
+      },
+      createStroke: (input) => strokeCrud.create({ created_by: me?.id ?? null, ...input }),
+      deleteStroke: strokeCrud.remove,
+
       async createApproval(input) {
         const a = await apprCrud.create({ status: "pending", ...input });
         if (a) toast("Хүсэлт илгээгдлээ");
@@ -571,7 +632,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       toast,
       dismissToast,
     };
-  }, [repo, ready, me, profiles, tasks, camps, departments, projects, projectCounts, financeEntries, payroll, files, approvals, dailyReports, agentRuns, toasts, toast, dismissToast, refresh, fail]);
+  }, [repo, ready, me, profiles, tasks, camps, departments, projects, projectCounts, financeEntries, payroll, files, ideas, ideaComments, ideaStickers, ideaStrokes, approvals, dailyReports, agentRuns, toasts, toast, dismissToast, refresh, fail]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

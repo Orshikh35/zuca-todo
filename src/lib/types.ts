@@ -323,6 +323,61 @@ export interface Message {
   edited_at: string | null;
 }
 
+/** Санааны самбар (FigJam шиг): наалт цаас — хэн ч бичиж, чирж зөөнө */
+export interface Idea {
+  id: string;
+  body: string;
+  /** Наалтын өнгө — IDEA_COLORS-ийн id */
+  color: string;
+  /** Самбар дээрх байрлал (px) */
+  x: number;
+  y: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * FigJam шиг сэтгэгдэл: thread_id-гүй мөр нь самбарт тавьсан бөмбөлөг (pin) — x, y байрлалтай,
+ * idea_id байвал тэр наалт дээр (x, y нь наалтаас). Хариултууд нь thread_id-аар холбогдоно.
+ * Бичсэн хүн нь нэргүй (амьтны хочоор) харагдана.
+ */
+export interface IdeaComment {
+  id: string;
+  idea_id: string | null;
+  thread_id: string | null;
+  x: number;
+  y: number;
+  body: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Самбарт наасан emoji стикер. idea_id байвал тэр наалт дээр наасан (x, y нь наалтаас хэмжинэ) */
+export interface IdeaSticker {
+  id: string;
+  emoji: string;
+  x: number;
+  y: number;
+  idea_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Самбар дээр үзгээр зурсан зураас. points нь самбарын координат */
+export interface IdeaStroke {
+  id: string;
+  points: [number, number][];
+  /** Өнгө, эсвэл «ink» — горимоос хамаарч хар/цагаан */
+  color: string;
+  width: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type ProfileInput = Partial<Omit<Profile, "id" | "created_at" | "updated_at">> & { full_name: string };
 export type TaskInput = Partial<Omit<Task, "id" | "created_at" | "updated_at">> & { title: string };
 export type CampInput = Partial<Omit<Camp, "id" | "created_at" | "updated_at">> & { name: string };
@@ -341,5 +396,9 @@ export interface Rows {
   approvals: Approval;
   daily_reports: DailyReport;
   agent_runs: AgentRun;
+  ideas: Idea;
+  idea_comments: IdeaComment;
+  idea_stickers: IdeaSticker;
+  idea_strokes: IdeaStroke;
 }
 export type TableName = keyof Rows;
