@@ -183,5 +183,7 @@ scripts/
 
 ## Deploy (Vercel)
 
-GitHub руу push → Vercel дээр import → Environment Variables-д Supabase-ийн 2 утга болон «AI туслах» хэсгийн утгуудыг нэмнэ (`APP_URL` = Vercel домэйн). Cron автоматаар `vercel.json`-оос идэвхжинэ. Supabase → Authentication → URL Configuration-д Vercel домэйноо **Site URL** болгоно.
+GitHub руу push → Vercel дээр import → Environment Variables-д Supabase-ийн 2 утга болон «AI туслах» хэсгийн утгуудыг нэмнэ (`APP_URL=https://todo.zuca.mn`). Cron автоматаар `vercel.json`-оос идэвхжинэ. Supabase → Authentication → URL Configuration-д `https://todo.zuca.mn`-ийг **Site URL**, `https://todo.zuca.mn/**`-ийг **Redirect URLs**-д нэмнэ.
+
+**Домэйн:** `todo.zuca.mn` — zuca.mn-ийн DNS дээр `CNAME todo → fcb195c5df0814cd.vercel-dns-017.com` (Vercel → Settings → Domains-ийн өгсөн утга). Домэйн солигдвол `APP_URL`, Supabase Site URL-ийг шинэчилж, **AI туслах → «Webhook тохируулах»**-ыг дахин дарна.
 # zuca-todo

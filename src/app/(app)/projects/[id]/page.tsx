@@ -3,10 +3,11 @@
 import { ArrowLeft, CalendarClock, Check, Columns3, FolderKanban, List, Pencil, Plus } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Suspense, useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { CardTitle } from "@/components/bento";
 import { Board, type BoardColumn } from "@/components/board";
 import { ProjectModal } from "@/components/projects/project-modal";
+import { QuickAdd } from "@/components/tasks/quick-add";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskModal, type TaskDraft } from "@/components/tasks/task-modal";
 import { Avatar, Button, Card, Empty, PriorityChip, Segmented, Select } from "@/components/ui";
@@ -36,10 +37,23 @@ function ProjectInner() {
   const { id } = useParams<{ id: string }>();
   const { ready, me, projectById, tasks, profiles, profileById, projectProgress, createTask, updateTask, updateProject } = useStore();
   const project = projectById.get(id);
-  const [view, setView] = useState<"list" | "board">("list");
+  // Анхдагч нь Kanban самбар; сүүлд сонгосон харагдацыг санана
+  const [view, setView] = useState<"list" | "board">(() => {
+    try {
+      return localStorage.getItem("project-view") === "list" ? "list" : "board";
+    } catch {
+      return "board";
+    }
+  });
   const [editing, setEditing] = useState(false);
   const [modal, setModal] = useState<{ task?: Task | null; draft?: TaskDraft } | null>(null);
   const [quick, setQuick] = useState({ title: "", assignee_id: "", due_date: "" });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("project-view", view);
+    } catch {}
+  }, [view]);
 
   const items = useMemo(() => tasks.filter((t) => t.project_id === id), [tasks, id]);
 
@@ -264,8 +278,8 @@ function ProjectInner() {
           value={view}
           onChange={setView}
           options={[
-            { id: "list", label: "Жагсаалт", icon: <List size={14} /> },
             { id: "board", label: "Самбар", icon: <Columns3 size={14} /> },
+            { id: "list", label: "Жагсаалт", icon: <List size={14} /> },
           ]}
         />
       </div>
@@ -287,7 +301,24 @@ function ProjectInner() {
           items={items}
           getColumn={getColumn}
           onMove={onMove}
+          columnWidth="w-[300px] xl:w-[calc((100%-3rem)/4)] xl:min-w-[270px]"
           renderCard={(t, { overlay }) => <TaskCard task={t} overlay={overlay} hideProject onOpen={(x) => setModal({ task: x })} />}
+          renderColumnFooter={(col) => (
+            <QuickAdd
+              onAdd={(title) =>
+                void createTask({
+                  title,
+                  status: col as TaskStatus,
+                  project_id: project.id,
+                  camp_id: project.camp_id,
+                  assignee_id: me?.id ?? null,
+                  department_id: me?.department_id ?? null,
+                  position: Date.now(),
+                  source: "manual",
+                })
+              }
+            />
+          )}
         />
       )}
 

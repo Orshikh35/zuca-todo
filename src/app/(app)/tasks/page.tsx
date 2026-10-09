@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CardTitle, Donut, FilterBar, Hero, HeroChip, heroBtn, Pill, pillField, Tile } from "@/components/bento";
 import { Board, type BoardColumn } from "@/components/board";
+import { QuickAdd } from "@/components/tasks/quick-add";
 import { TaskCard } from "@/components/tasks/task-card";
 import { TaskModal, type TaskDraft } from "@/components/tasks/task-modal";
 import { Avatar, Button, PageHeader, Segmented, Select } from "@/components/ui";
@@ -359,40 +360,6 @@ function TasksInner() {
 
       <TaskModal open={!!modal} task={modal?.task} draft={modal?.draft} onClose={() => setModal(null)} />
     </>
-  );
-}
-
-function QuickAdd({ onAdd }: { onAdd: (title: string) => void }) {
-  const [on, setOn] = useState(false);
-  const [v, setV] = useState("");
-  if (!on) {
-    return (
-      <button
-        onClick={() => setOn(true)}
-        className="flex w-full cursor-pointer items-center gap-1.5 rounded-full px-3 py-2 text-sm text-zinc-500 transition hover:bg-surface-solid hover:text-zinc-800"
-      >
-        <Plus size={15} /> Нэмэх
-      </button>
-    );
-  }
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (v.trim()) onAdd(v.trim());
-        setV("");
-      }}
-    >
-      <input
-        autoFocus
-        className="field rounded-[1.25rem]"
-        placeholder="Гарчиг бичээд Enter…"
-        value={v}
-        onChange={(e) => setV(e.target.value)}
-        onBlur={() => !v && setOn(false)}
-        onKeyDown={(e) => e.key === "Escape" && (setV(""), setOn(false))}
-      />
-    </form>
   );
 }
 
