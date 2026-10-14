@@ -63,6 +63,8 @@ export async function loadSnapshot(sb: SupabaseClient): Promise<OrgSnapshot> {
   };
 }
 
+const PENDING = "Таны бүртгэлийг админ батлаагүй байна";
+
 export interface Ctx {
   mode: "demo" | "supabase";
   me: Profile;
@@ -95,6 +97,7 @@ export async function requestContext(body: { snapshot?: OrgSnapshot; me_id?: str
   const snap = await loadSnapshot(sb);
   const me = snap.profiles.find((p) => p.user_id === user.id);
   if (!me) throw new HttpError(403, "Ажилтны бүртгэл олдсонгүй");
+  if (me.access !== "approved") throw new HttpError(403, PENDING);
   return { mode: "supabase", me, snap, sb };
 }
 
@@ -109,6 +112,7 @@ export async function requireMe(): Promise<{ sb: SupabaseClient; me: Profile }> 
   const { data: me, error } = await sb.from("profiles").select("*").eq("user_id", user.id).maybeSingle();
   if (error) throw new HttpError(500, error.message);
   if (!me) throw new HttpError(403, "Ажилтны бүртгэл олдсонгүй");
+  if ((me as Profile).access !== "approved") throw new HttpError(403, PENDING);
   return { sb, me: me as Profile };
 }
 

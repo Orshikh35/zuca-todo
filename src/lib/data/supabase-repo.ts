@@ -74,6 +74,8 @@ export function createSupabaseRepo(): Repo {
         notify_email: true,
         notify_telegram: true,
         active: true,
+        access: "pending",
+        access_notified_at: null,
         note: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

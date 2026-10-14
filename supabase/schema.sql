@@ -1052,3 +1052,106 @@ create policy "idea_strokes delete" on public.idea_strokes for delete to authent
 do $$ begin
   alter publication supabase_realtime add table public.idea_strokes;
 exception when others then null; end $$;
+
+-- ═════════════════════════ v10: Шинэ ажилтны бүртгэлийг админ батална ═════════════════════════
+-- Өөрөө бүртгүүлсэн хүн «pending» төлөвтэй үүснэ → админд имэйл очно → админ «Баг» хуудаснаас
+-- зөвшөөрсний дараа л өгөгдөл харж, ажиллана. Админ урьдчилан бүртгэсэн имэйлээр бүртгүүлсэн ч батлуулна
+-- ("Confirm email" унтраалттай үед өөр хүн тэр имэйлээр бүртгүүлж болзошгүй тул).
+-- Хуучин бүх ажилтан 'approved' болно.
+alter table public.profiles add column if not exists access text not null default 'approved';
+alter table public.profiles drop constraint if exists profiles_access_check;
+alter table public.profiles add constraint profiles_access_check check (access in ('pending', 'approved', 'rejected'));
+-- Админд мэдэгдсэн цаг (нэг хүсэлтэд нэг л имэйл)
+alter table public.profiles add column if not exists access_notified_at timestamptz;
+create index if not exists profiles_access_idx on public.profiles (access) where access <> 'approved';
+
+create or replace function public.is_approved()
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select access = 'approved' from public.profiles where user_id = auth.uid()), false)
+$$;
+
+-- Батлагдсан админ огт байхгүй бол (анхны суулгац) эхний хүн шууд нэвтэрнэ
+create or replace function public.has_approved_admin()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.profiles where role in ('admin', 'director') and access = 'approved')
+$$;
+
+-- Бүртгүүлэхэд: урьдчилан бүртгэсэн ажилтантай холбогдоно (идэвхтэй хэвээр), эс бөгөөс шинэ идэвхгүй мөр.
+-- Аль ч тохиолдолд админ батлах хүртэл pending.
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  nm text := coalesce(nullif(new.raw_user_meta_data ->> 'full_name', ''), split_part(new.email, '@', 1));
+  ok boolean := not public.has_approved_admin();
+begin
+  update public.profiles
+     set user_id   = new.id,
+         full_name = case when full_name = '' then nm else full_name end,
+         email     = new.email,
+         access    = case when ok then 'approved' else 'pending' end
+   where user_id is null
+     and lower(email) = lower(new.email);
+
+  if not found then
+    insert into public.profiles (user_id, full_name, email, access, active)
+    values (new.id, nm, new.email, case when ok then 'approved' else 'pending' end, ok);
+  end if;
+  return new;
+end $$;
+
+-- access-ийг зөвхөн админ өөрчилнө. Өөрийн мөрийг client-ээс үүсгэвэл pending болно.
+create or replace function public.guard_profile_access()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or public.is_leader() then return new; end if;   -- service role / админ
+  if tg_op = 'INSERT' then
+    if new.user_id is not null and public.has_approved_admin() then
+      new.access := 'pending';
+      new.active := false;
+    end if;
+    return new;
+  end if;
+  if new.access is not distinct from old.access then return new; end if;
+  raise exception 'Бүртгэл батлах эрхгүй байна';
+end $$;
+
+drop trigger if exists profiles_access_guard on public.profiles;
+create trigger profiles_access_guard before insert or update of access on public.profiles
+  for each row execute function public.guard_profile_access();
+
+-- Батлагдаагүй хүн active-ээ өөрөө true болгож болохгүй
+create or replace function public.guard_profile_active()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or public.is_leader() then return new; end if;
+  if new.active and not old.active and new.access <> 'approved' then
+    raise exception 'Бүртгэл батлагдаагүй байна';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists profiles_active_guard on public.profiles;
+create trigger profiles_active_guard before update of active on public.profiles
+  for each row execute function public.guard_profile_active();
+
+-- ── RLS: батлагдаагүй хүн зөвхөн өөрийн ажилтны мөрийг харна, өөр юу ч уншиж/бичихгүй ──
+-- RESTRICTIVE бодлого нь хүснэгт бүрийн одоо байгаа бодлоготой AND-аар нийлнэ.
+-- Шинэ хүснэгт нэмбэл энэ файлыг дахин ажиллуулахад тэр хүснэгтэд ч нэмэгдэнэ (v10 хамгийн сүүлд байх ёстой).
+drop policy if exists "approved only" on public.profiles;
+create policy "approved only" on public.profiles as restrictive for all to authenticated
+  using ((select public.is_approved()) or user_id = auth.uid())
+  with check ((select public.is_approved()) or user_id = auth.uid());
+
+do $$
+declare t text;
+begin
+  for t in
+    select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relkind = 'r' and c.relrowsecurity and c.relname <> 'profiles'
+  loop
+    execute format('drop policy if exists "approved only" on public.%I', t);
+    execute format(
+      'create policy "approved only" on public.%I as restrictive for all to authenticated
+         using ((select public.is_approved())) with check ((select public.is_approved()))', t);
+  end loop;
+end $$;

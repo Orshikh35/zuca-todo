@@ -36,8 +36,19 @@ function LoginInner() {
         await repo.signIn(email, password);
       } else {
         const { needsConfirm } = await repo.signUp(email, password, name);
+        // Админуудад «шинэ ажилтан бүртгүүллээ» имэйл явуулна — админ зөвшөөрсний дараа л нэвтэрнэ
+        if (!demo) {
+          await fetch("/api/access/request", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
+          }).catch(() => {});
+        }
         if (needsConfirm) {
-          setMsg({ tone: "ok", text: "Имэйл рүү баталгаажуулах холбоос илгээлээ. Баталгаажуулаад нэвтэрнэ үү." });
+          setMsg({
+            tone: "ok",
+            text: "Бүртгэл үүслээ. Имэйл рүү тань баталгаажуулах холбоос илгээлээ — баталгаажуулна уу. Админ зөвшөөрмөгц имэйлээр мэдэгдэх бөгөөд дараа нь нэвтэрч болно.",
+          });
           setBusy(false);
           return;
         }

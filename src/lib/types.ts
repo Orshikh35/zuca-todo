@@ -12,6 +12,8 @@ export type CampOwnership = "state" | "local" | "private" | "labor" | "org";
 export type Role = "admin" | "director" | "manager" | "member";
 export type ApprovalKind = "leave" | "purchase" | "expense" | "trip" | "general";
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "cancelled";
+/** Өөрөө бүртгүүлсэн ажилтныг админ батална (schema.sql v10) */
+export type AccessStatus = "pending" | "approved" | "rejected";
 
 /** Ажилтан. Нэвтрэх эрхгүйгээр бүртгэгдэж, ажил хариуцаж болно. */
 export interface Profile {
@@ -31,6 +33,9 @@ export interface Profile {
   notify_telegram: boolean;
   /** Ажлаас гарсан хүнийг устгалгүй идэвхгүй болгоно */
   active: boolean;
+  /** Системд нэвтрэх эрх: pending — админ батлахыг хүлээж байна */
+  access: AccessStatus;
+  access_notified_at: string | null;
   note: string | null;
   created_at: string;
   updated_at: string;

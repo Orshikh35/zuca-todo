@@ -15,6 +15,9 @@ export const atLeast = (me: Profile | null | undefined, role: Role) => !!me && R
  */
 export const isAdmin = (me: Profile | null | undefined) => !!me && (me.role === "admin" || me.role === "director");
 
+/** Админ баталсан эсэх. Demo-гийн хуучин өгөгдөлд талбар байхгүй бол батлагдсанд тооцно. */
+export const isApproved = (p: Profile | null | undefined) => !!p && (p.access ?? "approved") === "approved";
+
 export function canSeeTask(me: Profile | null | undefined, t: Pick<Task, "assignee_id" | "created_by">) {
   if (isAdmin(me)) return true;
   if (!t.assignee_id) return true;

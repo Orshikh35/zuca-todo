@@ -5,6 +5,7 @@ import {
   CalendarDays,
   CalendarRange,
   CheckSquare,
+  Clock,
   ChevronsLeft,
   ChevronsRight,
   ChevronsUpDown,
@@ -32,10 +33,43 @@ import { completeness } from "@/lib/completeness";
 import { ROLES } from "@/lib/constants";
 import { resetDemo } from "@/lib/data/demo-repo";
 import { useStore } from "@/lib/data/store";
-import { atLeast, isAdmin } from "@/lib/permissions";
+import { atLeast, isAdmin, isApproved } from "@/lib/permissions";
 import { useTheme, type ThemePref } from "@/lib/theme";
 import { cn, isOverdue } from "@/lib/utils";
 import { Avatar } from "./ui";
+
+/** Админ батлахаас өмнө харагдах дэлгэц (schema.sql v10 — RLS ч мөн бүх өгөгдлийг хаана) */
+function AccessGate({ rejected, name, email, onSignOut }: { rejected: boolean; name: string; email: string; onSignOut: () => void }) {
+  return (
+    <div className="flex min-h-dvh items-center justify-center p-4">
+      <div className="glass w-full max-w-md rounded-[2rem] p-8 text-center">
+        <div className={cn("mx-auto grid size-14 place-items-center rounded-2xl", rejected ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-600")}>
+          {rejected ? <X size={26} /> : <Clock size={26} />}
+        </div>
+        <h1 className="mt-5 text-2xl font-semibold tracking-tight">{rejected ? "Хүсэлт зөвшөөрөгдсөнгүй" : "Админ батлахыг хүлээж байна"}</h1>
+        <p className="mt-2 text-sm text-zinc-500">
+          {rejected ? (
+            <>Таны ZUCA Ops-д нэвтрэх хүсэлтийг админ зөвшөөрсөнгүй. Асуух зүйл байвал багийн ахлагчтайгаа холбогдоно уу.</>
+          ) : (
+            <>
+              Сайн байна уу, {name}! Бүртгэл тань үүслээ. Админ зөвшөөрмөгц <b className="text-zinc-700">{email}</b> хаягт имэйл очих бөгөөд дараа нь системд нэвтэрнэ.
+            </>
+          )}
+        </p>
+        <div className="mt-6 flex justify-center gap-2">
+          {!rejected && (
+            <button onClick={() => window.location.reload()} className="h-10 cursor-pointer rounded-full bg-neutral-900 px-5 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-white dark:text-neutral-900">
+              Дахин шалгах
+            </button>
+          )}
+          <button onClick={onSignOut} className="glass inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-full px-5 text-sm font-medium text-zinc-700 hover:text-zinc-900">
+            <LogOut size={15} /> Гарах
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 type NavItem = { href: string; label: string; short: string; icon: typeof Users; badge?: number | string; tone?: string; mobile?: boolean };
 
@@ -85,6 +119,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  if (!isApproved(me)) return <AccessGate rejected={me.access === "rejected"} name={me.full_name} email={me.email} onSignOut={() => void store.signOut()} />;
+
   const open = tasks.filter((t) => t.status !== "done");
   const mineUrgent = open.filter(
     (t) => t.assignee_id === me.id && (t.priority === "urgent" || isOverdue(t.due_date, false)),
@@ -105,7 +141,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { href: "/camps", label: "Зуслангууд", short: "Зуслан", icon: Tent, badge: lead ? incomplete : undefined, tone: "bg-amber-400 text-amber-950", mobile: true },
     ...(lead
       ? [
-          { href: "/team", label: "Баг", short: "Баг", icon: Users },
+          { href: "/team", label: "Баг", short: "Баг", icon: Users, badge: admin ? store.profiles.filter((p) => p.access === "pending").length : undefined, tone: "bg-amber-400 text-amber-950" },
           { href: "/reports", label: "Тайлан", short: "Тайлан", icon: BarChart3 },
         ]
       : []),

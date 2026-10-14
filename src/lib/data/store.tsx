@@ -95,6 +95,8 @@ interface Store {
   createProfile(input: ProfileInput): Promise<Profile | undefined>;
   updateProfile(id: string, patch: Partial<Profile>): Promise<void>;
   deleteProfile(id: string): Promise<void>;
+  /** Админ: өөрөө бүртгүүлсэн ажилтныг зөвшөөрөх / татгалзах (ажилтанд имэйл очно) */
+  decideAccess(id: string, decision: "approved" | "rejected"): Promise<void>;
   createTask(input: TaskInput): Promise<Task | undefined>;
   updateTask(id: string, patch: Partial<Task>): Promise<void>;
   deleteTask(id: string): Promise<void>;
@@ -367,6 +369,29 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         try {
           await repo.deleteProfile(id);
           toast("Ажилтан устгагдлаа");
+        } catch (e) {
+          fail(e);
+        }
+      },
+      async decideAccess(id, decision) {
+        const patch = { access: decision, active: decision === "approved" };
+        setProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+        try {
+          let saved: Profile;
+          if (repo.mode === "supabase") {
+            const res = await fetch("/api/access/decide", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ profile_id: id, decision }),
+            });
+            const json = (await res.json().catch(() => ({}))) as { profile?: Profile; emailed?: boolean; error?: string };
+            if (!res.ok || !json.profile) throw new Error(json.error ?? "Хадгалж чадсангүй");
+            saved = json.profile;
+          } else {
+            saved = await repo.updateProfile(id, patch);
+          }
+          setProfiles((prev) => prev.map((p) => (p.id === id ? saved : p)));
+          toast(decision === "approved" ? `${saved.full_name} — нэвтрэх эрх нээгдлээ` : `${saved.full_name} — хүсэлтийг татгалзлаа`);
         } catch (e) {
           fail(e);
         }

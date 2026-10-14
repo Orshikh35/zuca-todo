@@ -54,6 +54,8 @@ function blankProfile(input: ProfileInput): Profile {
     notify_email: true,
     notify_telegram: true,
     active: true,
+    access: "approved",
+    access_notified_at: null,
     note: null,
     created_at: nowISO(),
     updated_at: nowISO(),

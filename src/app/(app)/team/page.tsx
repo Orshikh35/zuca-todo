@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CalendarDays, Crown, KeyRound, Mail, Phone, Plus, Search, Send, Users } from "lucide-react";
+import { Building2, CalendarDays, Check, Crown, KeyRound, Mail, Phone, Plus, Search, Send, UserPlus, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BulkAddModal } from "@/components/team/bulk-add-modal";
@@ -9,12 +9,21 @@ import { Donut, Hero, HeroChip, heroBtn, pillField, Tile } from "@/components/be
 import { Avatar, Button, Card, Empty, PageHeader, Select } from "@/components/ui";
 import { useStore } from "@/lib/data/store";
 import { ROLES } from "@/lib/constants";
-import { atLeast, canEditProfile, isAdmin } from "@/lib/permissions";
+import { atLeast, canEditProfile, isAdmin, isApproved } from "@/lib/permissions";
 import type { Profile } from "@/lib/types";
-import { cn, isOverdue } from "@/lib/utils";
+import { cn, isOverdue, relativeTime } from "@/lib/utils";
 
 export default function TeamPage() {
-  const { profiles, tasks, camps, me, departments, deptById } = useStore();
+  const { profiles: all, tasks, camps, me, departments, deptById, decideAccess } = useStore();
+  // Админ батлаагүй бүртгэлүүд жагсаалтад орохгүй — доорх «Бүртгэлийн хүсэлт» хэсэгт л харагдана
+  const profiles = useMemo(() => all.filter(isApproved), [all]);
+  const requests = all.filter((p) => !isApproved(p)).sort((a, b) => Number(b.access === "pending") - Number(a.access === "pending") || b.created_at.localeCompare(a.created_at));
+  const [busy, setBusy] = useState<string | null>(null);
+  async function decide(id: string, decision: "approved" | "rejected") {
+    setBusy(id);
+    await decideAccess(id, decision);
+    setBusy(null);
+  }
   const [q, setQ] = useState("");
   const [dept, setDept] = useState("");
   const [showInactive, setShowInactive] = useState(false);
@@ -81,6 +90,45 @@ export default function TeamPage() {
           </>
         }
       />
+
+      {/* Өөрөө бүртгүүлсэн хүмүүс — админ зөвшөөрсний дараа л нэвтэрнэ */}
+      {isAdmin(me) && requests.length > 0 && (
+        <section id="access" className="glass mb-5 scroll-mt-4 rounded-[1.75rem] p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <UserPlus size={17} className="text-amber-600" />
+            <h2 className="text-[15px] font-semibold">Бүртгэлийн хүсэлт</h2>
+            <span className="rounded-full bg-amber-400 px-1.5 text-[10.5px] leading-[18px] font-semibold text-amber-950">
+              {requests.filter((p) => p.access === "pending").length}
+            </span>
+          </div>
+          <div className="divide-y divide-zinc-100">
+            {requests.map((p) => (
+              <div key={p.id} className={cn("flex flex-wrap items-center gap-3 py-2.5", p.access === "rejected" && "opacity-60")}>
+                <Avatar profile={p} size={36} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-sm font-medium">{p.full_name}</span>
+                    {p.access === "rejected" && <span className="rounded-full bg-red-50 px-1.5 text-[10px] font-semibold text-red-600">Татгалзсан</span>}
+                  </div>
+                  <div className="truncate text-xs text-zinc-500">
+                    {p.email} · {relativeTime(p.created_at)}
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant="primary" disabled={busy === p.id} onClick={() => void decide(p.id, "approved")}>
+                    <Check size={14} /> Зөвшөөрөх
+                  </Button>
+                  {p.access === "pending" && (
+                    <Button size="sm" variant="danger" disabled={busy === p.id} onClick={() => void decide(p.id, "rejected")}>
+                      <X size={14} /> Татгалзах
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Bento товчоо */}
       <div className="mb-5 flex flex-wrap gap-4">
