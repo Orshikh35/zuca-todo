@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
     const targets = snap.profiles.filter((p) => body.person_ids?.includes(p.id) && p.active);
     if (!targets.length) throw new HttpError(400, "Хүлээн авагч сонгоогүй");
-    const denied = targets.find((p) => !canNotify(me, p, snap.departments));
+    const denied = targets.find((p) => !canNotify(me, p));
     if (denied) throw new HttpError(403, `${denied.full_name}-д илгээх эрхгүй`);
 
     const date = todayIn();

@@ -4,12 +4,8 @@ export type CampStage = "lead" | "contacted" | "onboarding" | "active" | "inacti
 export type CampSeason = "summer" | "autumn" | "all_year";
 export type CampOwnership = "state" | "local" | "private" | "labor" | "org";
 
-/**
- * Эрхийн түвшин:
- * admin — системийн бүх тохиргоо · director — удирдлага, бүх хэлтсийг харж батална ·
- * manager — өөрийн хэлтсийг удирдана · member — өөрийн ажил
- */
-export type Role = "admin" | "director" | "manager" | "member";
+/** ZUCA-д хоёр эрх: admin — бүх ажил, баг, санхүү, тохиргоо · member — өөрийн болон эзэнгүй ажил */
+export type Role = "admin" | "member";
 export type ApprovalKind = "leave" | "purchase" | "expense" | "trip" | "general";
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "cancelled";
 /** Өөрөө бүртгүүлсэн ажилтныг админ батална (schema.sql v10) */
@@ -26,7 +22,6 @@ export interface Profile {
   job_title: string | null;
   color: string;
   role: Role;
-  department_id: string | null;
   /** Telegram-аар өдрийн ажлаа авах chat id (bot-оор холбоно) */
   telegram_chat_id: string | null;
   notify_email: boolean;
@@ -52,10 +47,6 @@ export interface Task {
   camp_id: string | null;
   /** Аль төсөлд хамаарах (v7) */
   project_id?: string | null;
-  /** Ажлыг гүйцэтгэх хэлтэс */
-  department_id: string | null;
-  /** Өөр хэлтсээс ирсэн хүсэлт бол тэр хэлтэс */
-  from_department_id: string | null;
   due_date: string | null; // YYYY-MM-DD
   /** Төлөвлөсөн сар "YYYY-MM" — Төлөвлөгөө хуудсанд харагдана */
   planned_month: string | null;
@@ -162,7 +153,6 @@ export interface FinanceEntry {
   /** Хэнд төлсөн / хэнээс орсон */
   vendor: string | null;
   description: string | null;
-  department_id: string | null;
   project_id: string | null;
   /** Холбоотой ажилтан (томилолт, сургалт гэх мэт) */
   profile_id: string | null;
@@ -215,20 +205,6 @@ export interface StoredFile {
   updated_at: string;
 }
 
-/** Хэлтэс / нэгж. parent_id-аар шатлал үүсгэнэ */
-export interface Department {
-  id: string;
-  name: string;
-  code: string | null;
-  color: string;
-  description: string | null;
-  head_id: string | null;
-  parent_id: string | null;
-  position: number;
-  created_at: string;
-  updated_at: string;
-}
-
 /** Батлуулах хүсэлт: чөлөө, худалдан авалт, зардал, томилолт гэх мэт */
 export interface Approval {
   id: string;
@@ -239,7 +215,6 @@ export interface Approval {
   start_date: string | null;
   end_date: string | null;
   requester_id: string;
-  department_id: string | null;
   approver_id: string | null;
   status: ApprovalStatus;
   decision_note: string | null;
@@ -281,7 +256,6 @@ export interface Channel {
   slug: string;
   description: string | null;
   kind: "team" | "inbox";
-  department_id: string | null;
   ai_mode: AiMode;
   position: number;
   archived: boolean;
@@ -298,7 +272,6 @@ export interface TaskProposal {
   priority: TaskPriority;
   due_date: string;
   camp_id: string;
-  department_id: string;
   project_id?: string;
   status?: "open" | "created" | "dismissed";
   task_id?: string;
@@ -386,14 +359,12 @@ export interface IdeaStroke {
 export type ProfileInput = Partial<Omit<Profile, "id" | "created_at" | "updated_at">> & { full_name: string };
 export type TaskInput = Partial<Omit<Task, "id" | "created_at" | "updated_at">> & { title: string };
 export type CampInput = Partial<Omit<Camp, "id" | "created_at" | "updated_at">> & { name: string };
-export type DepartmentInput = Partial<Omit<Department, "id" | "created_at" | "updated_at">> & { name: string };
 export type ApprovalInput = Partial<Omit<Approval, "id" | "created_at" | "updated_at">> & { title: string; requester_id: string };
 export type ProjectInput = Partial<Omit<Project, "id" | "created_at" | "updated_at">> & { name: string };
 export type DailyReportInput = Partial<Omit<DailyReport, "id" | "created_at" | "updated_at">> & { profile_id: string; date: string; done: string };
 
 /** Ерөнхий CRUD хийгддэг хүснэгтүүд */
 export interface Rows {
-  departments: Department;
   projects: Project;
   finance_entries: FinanceEntry;
   payroll: Payroll;

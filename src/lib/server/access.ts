@@ -22,7 +22,7 @@ export async function notifyAdminsOfSignup(sb: SupabaseClient, person: Pick<Prof
   const { data } = await sb
     .from("profiles")
     .select("full_name, email, telegram_chat_id")
-    .in("role", ["admin", "director"])
+    .eq("role", "admin")
     .eq("access", "approved")
     .eq("active", true);
   const admins = (data ?? []) as Pick<Profile, "full_name" | "email" | "telegram_chat_id">[];

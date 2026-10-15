@@ -69,7 +69,6 @@ export function createSupabaseRepo(): Repo {
         job_title: null,
         color: "#4f46e5",
         role: "member",
-        department_id: null,
         telegram_chat_id: null,
         notify_email: true,
         notify_telegram: true,
@@ -142,7 +141,7 @@ export function createSupabaseRepo(): Repo {
     },
 
     async list<K extends TableName>(table: K) {
-      if (table === "departments" || table === "projects") return must(await sb.from(table).select("*").order("position")) as Rows[K][];
+      if (table === "projects") return must(await sb.from(table).select("*").order("position")) as Rows[K][];
       // Түүхэн мөрүүд хязгааргүй өснө — сүүлийнхийг л ачаална
       const limit = table === "agent_runs" ? 300 : 3000;
       return must(await sb.from(table).select("*").order("created_at", { ascending: false }).limit(limit)) as Rows[K][];
@@ -199,7 +198,6 @@ export function createSupabaseRepo(): Repo {
         .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "camps" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, debounced)
-        .on("postgres_changes", { event: "*", schema: "public", table: "departments" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "projects" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "finance_entries" }, debounced)
         .on("postgres_changes", { event: "*", schema: "public", table: "payroll" }, debounced)

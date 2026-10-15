@@ -17,9 +17,8 @@ const HEADERS: Record<string, string[]> = {
   email: ["имэйл", "и-мэйл", "email", "e-mail", "mail"],
   phone: ["утас", "утасны дугаар", "phone", "mobile"],
   job: ["албан тушаал", "тушаал", "position", "job", "job title", "title"],
-  dept: ["хэлтэс", "нэгж", "department", "dept"],
 };
-const DEFAULT_ORDER = ["name", "email", "phone", "job", "dept"];
+const DEFAULT_ORDER = ["name", "email", "phone", "job"];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface Row {
@@ -27,17 +26,14 @@ interface Row {
   email: string;
   phone: string;
   job: string;
-  deptText: string;
-  deptId: string | null;
   status: "new" | "exists" | "dupe" | "invalid";
   note?: string;
 }
 
 /** Excel / Google Sheets-ээс хуулсан эсвэл CSV файлаас олон ажилтныг нэг дор бүртгэнэ */
 export function BulkAddModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { me, profiles, departments, refresh, toast } = useStore();
+  const { me, profiles, refresh, toast } = useStore();
   const [text, setText] = useState("");
-  const [defaultDept, setDefaultDept] = useState(me?.role === "manager" ? me.department_id ?? "" : "");
   const [role, setRole] = useState<Role>("member");
   const [saving, setSaving] = useState<{ done: number; total: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -55,11 +51,6 @@ export function BulkAddModal({ open, onClose }: { open: boolean; onClose: () => 
 
     const known = new Set(profiles.map((p) => p.email.toLowerCase()).filter(Boolean));
     const seen = new Set<string>();
-    const findDept = (v: string) => {
-      const s = v.trim().toLowerCase();
-      if (!s) return null;
-      return departments.find((d) => d.name.toLowerCase() === s || d.code?.toLowerCase() === s)?.id ?? null;
-    };
 
     return body.map((cells) => {
       const get = (k: string) => cells[order.indexOf(k)] ?? "";
@@ -70,8 +61,6 @@ export function BulkAddModal({ open, onClose }: { open: boolean; onClose: () => 
         email,
         phone: get("phone"),
         job: get("job"),
-        deptText: get("dept"),
-        deptId: findDept(get("dept")),
         status: "new",
       };
       if (!row.name) return { ...row, status: "invalid", note: "Нэр алга" };
@@ -79,13 +68,12 @@ export function BulkAddModal({ open, onClose }: { open: boolean; onClose: () => 
       if (email && known.has(email)) return { ...row, status: "exists", note: "Аль хэдийн бүртгэлтэй" };
       if (email && seen.has(email)) return { ...row, status: "dupe", note: "Жагсаалтад давхар" };
       if (email) seen.add(email);
-      if (row.deptText && !row.deptId) row.note = `«${row.deptText}» хэлтэс олдсонгүй`;
       return row;
     });
-  }, [text, profiles, departments]);
+  }, [text, profiles]);
 
   const toAdd = rows.filter((r) => r.status === "new");
-  const roleOptions = ROLES.filter((r) => r.selectable && (r.id === "member" || canSetRole(me, r.id)));
+  const roleOptions = ROLES.filter((r) => r.id === "member" || canSetRole(me));
 
   function close() {
     if (saving) return;
@@ -110,7 +98,6 @@ export function BulkAddModal({ open, onClose }: { open: boolean; onClose: () => 
           email: r.email,
           phone: r.phone || null,
           job_title: r.job || null,
-          department_id: r.deptId ?? (defaultDept || null),
           role,
           color: MEMBER_COLORS[(profiles.length + i) % MEMBER_COLORS.length],
         });
@@ -174,30 +161,17 @@ export function BulkAddModal({ open, onClose }: { open: boolean; onClose: () => 
           <textarea
             id="bulk-text"
             className="field min-h-36 font-mono text-xs"
-            placeholder={"Нэр, Имэйл, Утас, Албан тушаал, Хэлтэс\nБат-Эрдэнэ, bat@zuca.mn, 99112233, Менежер, Партнершип\nСараа, saraa@zuca.mn, 88112233, Нягтлан, Санхүү"}
+            placeholder={"Нэр, Имэйл, Утас, Албан тушаал\nБат-Эрдэнэ, bat@zuca.mn, 99112233, Партнершип менежер\nСараа, saraa@zuca.mn, 88112233, Нягтлан бодогч"}
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
           <p className="mt-1 text-[11px] text-zinc-500">
-            Баганын дараалал: Нэр, Имэйл, Утас, Албан тушаал, Хэлтэс. Эхний мөрөнд гарчиг байвал дарааллыг өөрөө танина. Зөвхөн нэр заавал.
+            Баганын дараалал: Нэр, Имэйл, Утас, Албан тушаал. Эхний мөрөнд гарчиг байвал дарааллыг өөрөө танина. Зөвхөн нэр заавал.
             Имэйлээр нь тухайн хүн дараа бүртгүүлэхэд бүртгэл нь автоматаар холбогдоно.
           </p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="bulk-dept">
-              Хэлтэс заагаагүй бол
-            </label>
-            <Select id="bulk-dept" className="field" value={defaultDept} onChange={(e) => setDefaultDept(e.target.value)}>
-              <option value="">— Хэлтэсгүй</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </Select>
-          </div>
           <div>
             <label className="label" htmlFor="bulk-role">
               Эрхийн түвшин (бүгдэд)
@@ -221,7 +195,6 @@ export function BulkAddModal({ open, onClose }: { open: boolean; onClose: () => 
                   <th className="px-3 py-2 font-medium">Имэйл</th>
                   <th className="px-3 py-2 font-medium">Утас</th>
                   <th className="px-3 py-2 font-medium">Албан тушаал</th>
-                  <th className="px-3 py-2 font-medium">Хэлтэс</th>
                   <th className="px-3 py-2 font-medium">Төлөв</th>
                 </tr>
               </thead>
@@ -232,9 +205,6 @@ export function BulkAddModal({ open, onClose }: { open: boolean; onClose: () => 
                     <td className="px-3 py-1.5">{r.email || "—"}</td>
                     <td className="px-3 py-1.5">{r.phone || "—"}</td>
                     <td className="px-3 py-1.5">{r.job || "—"}</td>
-                    <td className="px-3 py-1.5">
-                      {r.deptId ? departments.find((d) => d.id === r.deptId)?.name : r.deptText ? <span className="text-amber-600">{r.deptText}?</span> : "—"}
-                    </td>
                     <td className="px-3 py-1.5 whitespace-nowrap">
                       {r.status === "new" ? (
                         <span className={r.note ? "text-amber-600" : "text-emerald-600"}>{r.note ?? "Шинэ"}</span>

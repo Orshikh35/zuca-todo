@@ -14,7 +14,7 @@ import { cn, fmtMNT, todayISO } from "@/lib/utils";
 const MONEY_FIELDS = ["base_salary", "bonus", "social_insurance", "income_tax", "other_deductions", "employer_insurance"] as const;
 
 export function PayrollTab() {
-  const { payroll, profiles, deptById, files, savePayroll, toast } = useStore();
+  const { payroll, profiles, files, savePayroll, toast } = useStore();
   const [month, setMonth] = useState(currentMonthKey());
   const [modal, setModal] = useState<{ profile: Profile; row?: Payroll } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -94,7 +94,6 @@ export function PayrollTab() {
             <tbody className="divide-y divide-zinc-100">
               {people.map((p) => {
                 const r = byProfile.get(p.id);
-                const dept = p.department_id ? deptById.get(p.department_id) : null;
                 const nFiles = hrFiles.get(p.id) ?? 0;
                 return (
                   <tr key={p.id} onClick={() => setModal({ profile: p, row: r })} className="cursor-pointer transition hover:bg-zinc-50">
@@ -105,7 +104,6 @@ export function PayrollTab() {
                           <span className="block truncate font-medium">{p.full_name}</span>
                           <span className="block truncate text-[11px] text-zinc-500">
                             {p.job_title || "—"}
-                            {dept && ` · ${dept.name}`}
                           </span>
                         </span>
                         <Link

@@ -5,14 +5,14 @@ import { useMemo, useState } from "react";
 import { Avatar, Button, Card, Empty, Modal, PageHeader, Segmented, Select } from "@/components/ui";
 import { APPROVAL_KINDS, APPROVAL_STATUSES } from "@/lib/constants";
 import { useStore } from "@/lib/data/store";
-import { approverFor, canDecide, canSeeApproval } from "@/lib/permissions";
+import { approverFor, canDecide, canSeeApproval, isAdmin, pickByJob } from "@/lib/permissions";
 import type { Approval, ApprovalKind } from "@/lib/types";
 import { cn, fmtMNT, relativeTime, todayISO } from "@/lib/utils";
 
 type Tab = "inbox" | "mine" | "all";
 
 export default function ApprovalsPage() {
-  const { approvals, me, departments, profileById, deptById } = useStore();
+  const { approvals, me, profileById } = useStore();
   const inboxCount = approvals.filter((a) => a.status === "pending" && canDecide(me, a)).length;
   const [tab, setTab] = useState<Tab>(inboxCount ? "inbox" : "mine");
   const [creating, setCreating] = useState(false);
@@ -20,18 +20,18 @@ export default function ApprovalsPage() {
 
   const rows = useMemo(() => {
     const list = approvals.filter((a) =>
-      tab === "inbox" ? a.status === "pending" && canDecide(me, a) : tab === "mine" ? a.requester_id === me?.id : canSeeApproval(me, a, departments),
+      tab === "inbox" ? a.status === "pending" && canDecide(me, a) : tab === "mine" ? a.requester_id === me?.id : canSeeApproval(me, a),
     );
     return list.sort((a, b) => Number(b.status === "pending") - Number(a.status === "pending") || b.created_at.localeCompare(a.created_at));
-  }, [approvals, tab, me, departments]);
+  }, [approvals, tab, me]);
 
-  const pendingAll = approvals.filter((a) => a.status === "pending" && canSeeApproval(me, a, departments)).length;
+  const pendingAll = approvals.filter((a) => a.status === "pending" && canSeeApproval(me, a)).length;
 
   return (
     <>
       <PageHeader
         title="Хүсэлт, батлалт"
-        subtitle="Чөлөө, худалдан авалт, зардал, томилолт — хэлтсийн дарга → удирдлага батална"
+        subtitle="Чөлөө, худалдан авалт, зардал, томилолт — админ батална"
         actions={
           <Button variant="primary" onClick={() => setCreating(true)}>
             <Plus size={16} /> Шинэ хүсэлт
@@ -65,7 +65,6 @@ export default function ApprovalsPage() {
               const st = APPROVAL_STATUSES.find((s) => s.id === a.status)!;
               const req = profileById.get(a.requester_id);
               const appr = a.approver_id ? profileById.get(a.approver_id) : null;
-              const dept = a.department_id ? deptById.get(a.department_id) : null;
               return (
                 <li key={a.id} className="flex flex-wrap items-start gap-3 px-5 py-4 sm:flex-nowrap">
                   <Avatar profile={req} size={34} />
@@ -78,7 +77,7 @@ export default function ApprovalsPage() {
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-zinc-500">
                       <span>
                         {req?.full_name ?? "?"}
-                        {dept ? ` · ${dept.name}` : ""}
+                        {req?.job_title ? ` · ${req.job_title}` : ""}
                       </span>
                       {a.amount != null && <span className="tabular font-medium text-zinc-700">{fmtMNT(a.amount)}</span>}
                       {a.start_date && (
@@ -142,12 +141,12 @@ function Actions({ a, onDecide }: { a: Approval; onDecide: (approve: boolean) =>
 }
 
 function Decide({ a, approve, onClose }: { a: Approval; approve: boolean; onClose: () => void }) {
-  const { updateApproval, createTask, departments, profileById, toast } = useStore();
+  const { me, profiles, updateApproval, createTask, profileById, toast } = useStore();
   const [note, setNote] = useState("");
   const kind = APPROVAL_KINDS.find((k) => k.id === a.kind)!;
-  // Мөнгөтэй хүсэлт батлагдвал санхүүгийн хэлтэст төлбөрийн ажил үүснэ
-  const finance = departments.find((d) => d.code?.toUpperCase() === "FIN" || /санхүү/i.test(d.name));
-  const makesTask = approve && kind.money && a.amount && finance;
+  // Мөнгөтэй хүсэлт батлагдвал нягтланд (албан тушаалаар), олдохгүй бол баталсан хүнд төлбөрийн ажил үүснэ
+  const payer = pickByJob(profiles, /нягтлан|санхүү|accountant|finance/i) ?? me;
+  const makesTask = approve && kind.money && a.amount && payer;
 
   async function submit() {
     await updateApproval(a.id, { status: approve ? "approved" : "rejected", decision_note: note.trim() || null, decided_at: new Date().toISOString() });
@@ -158,16 +157,14 @@ function Decide({ a, approve, onClose }: { a: Approval; approve: boolean; onClos
         description: `${kind.label} · ${fmtMNT(a.amount)} · ${req?.full_name ?? ""}\nБатлагдсан хүсэлтээс автоматаар үүсэв.`,
         priority: "high",
         status: "todo",
-        department_id: finance.id,
-        from_department_id: a.department_id !== finance.id ? a.department_id : null,
-        assignee_id: finance.head_id,
+        assignee_id: payer.id,
         due_date: todayISO(),
         planned_month: todayISO().slice(0, 7),
         tags: ["батлалт"],
         position: Date.now(),
       });
     }
-    toast(approve ? "Хүсэлт батлагдлаа" + (makesTask ? " · санхүүд ажил үүслээ" : "") : "Хүсэлтээс татгалзлаа");
+    toast(approve ? "Хүсэлт батлагдлаа" + (makesTask ? ` · ${payer.full_name}-д төлбөрийн ажил үүслээ` : "") : "Хүсэлтээс татгалзлаа");
     onClose();
   }
 
@@ -195,7 +192,7 @@ function Decide({ a, approve, onClose }: { a: Approval; approve: boolean; onClos
       <textarea id="dec-note" autoFocus className="field min-h-20" value={note} onChange={(e) => setNote(e.target.value)} placeholder={approve ? "Зөвшөөрөв" : "Шалтгаан"} />
       {makesTask && (
         <p className="mt-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
-          Батлахад <b>{finance.name}</b> хэлтэст «Төлбөр гүйцэтгэх» ажил автоматаар үүснэ.
+          Батлахад <b>{payer.full_name}</b>-д «Төлбөр гүйцэтгэх» ажил автоматаар үүснэ.
         </p>
       )}
     </Modal>
@@ -203,10 +200,10 @@ function Decide({ a, approve, onClose }: { a: Approval; approve: boolean; onClos
 }
 
 function NewApproval({ onClose }: { onClose: () => void }) {
-  const { me, profiles, departments, createApproval } = useStore();
+  const { me, profiles, createApproval } = useStore();
   const [kind, setKind] = useState<ApprovalKind>("leave");
   const [f, setF] = useState({ title: "", description: "", amount: "", start_date: "", end_date: "" });
-  const auto = me ? approverFor(me, departments, profiles) : null;
+  const auto = me ? approverFor(me, profiles) : null;
   const [approver, setApprover] = useState(auto ?? "");
   const k = APPROVAL_KINDS.find((x) => x.id === kind)!;
   const set = (key: keyof typeof f, v: string) => setF((p) => ({ ...p, [key]: v }));
@@ -222,7 +219,6 @@ function NewApproval({ onClose }: { onClose: () => void }) {
       start_date: k.dates ? f.start_date || null : null,
       end_date: k.dates ? f.end_date || f.start_date || null : null,
       requester_id: me.id,
-      department_id: me.department_id,
       approver_id: approver || null,
     });
     onClose();
@@ -291,14 +287,14 @@ function NewApproval({ onClose }: { onClose: () => void }) {
         <div>
           <label className="label" htmlFor="a-appr">Батлах хүн</label>
           <Select id="a-appr" className="field" value={approver} onChange={(e) => setApprover(e.target.value)}>
-            <option value="">— Удирдлага (дурын) —</option>
+            <option value="">— Дурын админ —</option>
             {profiles
-              .filter((p) => p.active && p.id !== me?.id && p.role !== "member")
+              .filter((p) => p.active && p.id !== me?.id && isAdmin(p))
               .map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.full_name}
                   {p.job_title ? ` · ${p.job_title}` : ""}
-                  {p.id === auto ? " (хэлтсийн дарга / санал болгож буй)" : ""}
+                  {p.id === auto ? " (санал болгож буй)" : ""}
                 </option>
               ))}
           </Select>

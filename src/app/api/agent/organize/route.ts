@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     const { me, snap, sb } = await requestContext(body);
     const person = snap.profiles.find((p) => p.id === (body.person_id || me.id));
     if (!person) throw new HttpError(404, "Ажилтан олдсонгүй");
-    if (!canNotify(me, person, snap.departments)) throw new HttpError(403, "Энэ хүний ажлыг цэгцлэх эрхгүй");
+    if (!canNotify(me, person)) throw new HttpError(403, "Энэ хүний ажлыг цэгцлэх эрхгүй");
 
     const plan = await organizeDay(snap, person, todayIn());
     await sb?.from("agent_runs").insert({ profile_id: person.id, kind: "organize", channel: "preview", ok: true, detail: plan.summary.slice(0, 200) });

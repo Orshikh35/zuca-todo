@@ -16,7 +16,7 @@ const APPROVAL_CATEGORY: Partial<Record<Approval["kind"], string>> = { purchase:
 type Draft = Partial<FinanceEntry> & { kind: FinanceKind };
 
 export function EntriesTab({ months, label }: { months: string[]; label: string }) {
-  const { financeEntries, approvals, files, profileById, deptById, projectById } = useStore();
+  const { financeEntries, approvals, files, profileById, projectById } = useStore();
   const [kind, setKind] = useState<"" | FinanceKind>("");
   const [category, setCategory] = useState("");
   const [q, setQ] = useState("");
@@ -102,7 +102,6 @@ export function EntriesTab({ months, label }: { months: string[]; label: string 
                         title: a.title,
                         amount: a.amount ?? 0,
                         description: a.description,
-                        department_id: a.department_id,
                         profile_id: a.requester_id,
                         approval_id: a.id,
                         date: (a.decided_at ?? a.created_at).slice(0, 10),
@@ -132,7 +131,6 @@ export function EntriesTab({ months, label }: { months: string[]; label: string 
         <div className="divide-y divide-zinc-100">
           {rows.map((e) => {
             const n = attachCount.get(e.id) ?? 0;
-            const dept = e.department_id ? deptById.get(e.department_id) : null;
             const proj = e.project_id ? projectById.get(e.project_id) : null;
             return (
               <button key={e.id} onClick={() => setModal({ entry: e })} className="flex w-full cursor-pointer items-center gap-3 px-5 py-3 text-left transition hover:bg-zinc-50">
@@ -142,7 +140,6 @@ export function EntriesTab({ months, label }: { months: string[]; label: string 
                   <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-zinc-500">
                     {financeCategoryLabel(e.kind, e.category)}
                     {e.vendor && <span>· {e.vendor}</span>}
-                    {dept && <span>· {dept.name}</span>}
                     {proj && (
                       <span className="font-medium" style={{ color: proj.color }}>
                         · {proj.name}
@@ -189,7 +186,7 @@ export function MoneyInput({ value, onChange, autoFocus }: { value: number; onCh
 }
 
 function EntryModal({ entry, draft, onClose }: { entry?: FinanceEntry; draft?: Draft; onClose: () => void }) {
-  const { departments, projects, profiles, files, createEntry, updateEntry, deleteEntry, uploadFiles, openFile, deleteFile } = useStore();
+  const { projects, profiles, files, createEntry, updateEntry, deleteEntry, uploadFiles, openFile, deleteFile } = useStore();
   const [f, setF] = useState(() => ({
     kind: entry?.kind ?? draft?.kind ?? "expense",
     category: entry?.category ?? draft?.category ?? "other",
@@ -198,7 +195,6 @@ function EntryModal({ entry, draft, onClose }: { entry?: FinanceEntry; draft?: D
     date: entry?.date ?? draft?.date ?? todayISO(),
     vendor: entry?.vendor ?? draft?.vendor ?? "",
     description: entry?.description ?? draft?.description ?? "",
-    department_id: entry?.department_id ?? draft?.department_id ?? "",
     project_id: entry?.project_id ?? draft?.project_id ?? "",
     profile_id: entry?.profile_id ?? draft?.profile_id ?? "",
   }));
@@ -223,7 +219,6 @@ function EntryModal({ entry, draft, onClose }: { entry?: FinanceEntry; draft?: D
       title: f.title.trim(),
       vendor: f.vendor.trim() || null,
       description: f.description.trim() || null,
-      department_id: f.department_id || null,
       project_id: f.project_id || null,
       profile_id: f.profile_id || null,
     };
@@ -318,17 +313,6 @@ function EntryModal({ entry, draft, onClose }: { entry?: FinanceEntry; draft?: D
             <input className="field" placeholder="Байгууллага, хүн" value={f.vendor} onChange={(e) => set("vendor", e.target.value)} />
           </div>
           <div>
-            <label className="label">Хэлтэс</label>
-            <Select className="field" value={f.department_id} onChange={(e) => set("department_id", e.target.value)}>
-              <option value="">— Хэлтэсгүй —</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div>
             <label className="label">Төсөл</label>
             <Select className="field" value={f.project_id} onChange={(e) => set("project_id", e.target.value)}>
               <option value="">— Төсөлгүй —</option>
@@ -339,7 +323,7 @@ function EntryModal({ entry, draft, onClose }: { entry?: FinanceEntry; draft?: D
               ))}
             </Select>
           </div>
-          <div className="sm:col-span-2">
+          <div>
             <label className="label">Холбоотой ажилтан</label>
             <Select className="field" value={f.profile_id} onChange={(e) => set("profile_id", e.target.value)}>
               <option value="">— Байхгүй —</option>

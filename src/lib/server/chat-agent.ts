@@ -8,7 +8,7 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { prettyDate, shiftDate } from "../agent/digest";
-import type { Camp, Department, MessageAuthorKind, Profile, Task, TaskPriority, TaskProposal } from "../types";
+import type { Camp, MessageAuthorKind, Profile, Task, TaskPriority, TaskProposal } from "../types";
 import { AI_MODEL, AgentError, aiConfigured, anthropic } from "./ai";
 import { notifyAssignee } from "./task-notify";
 
@@ -26,7 +26,7 @@ export interface AgentRequest {
   /** Боловсруулах шинэ мессеж */
   text: string;
   from: { name: string; kind: MessageAuthorKind; profile: Profile | null; via: string };
-  channel: { name: string; kind: "team" | "inbox"; department_id: string | null };
+  channel: { name: string; kind: "team" | "inbox" };
   /** @ai гэж хандсан, эсвэл хүн «Ажил болгох» дарсан */
   mentioned: boolean;
   /** auto: ажлыг шууд үүсгэнэ · suggest: санал болгоно */
@@ -35,7 +35,6 @@ export interface AgentRequest {
   forced?: boolean;
   history: ChatLine[];
   people: Profile[];
-  departments: Department[];
   camps: CampLite[];
   /** Явагдаж буй төслүүд */
   projects: { id: string; name: string }[];
@@ -68,7 +67,7 @@ const SYSTEM = `Та бол ZUCA (zuca.mn — Монголын хүүхдийн 
 Ажлын талбарууд:
 - title: богино, тодорхой, үйл үгээр төгссөн («Хөх тэнгэр зуслантай холбогдож намрын ээлжийн хуваарь авах»). Зуслан бол нэрийг нь оруул.
 - description: мессеж дэх хэрэгтэй дэлгэрэнгүй (утас, тоо, нөхцөл, хэн хүссэн). Зохиохгүй. Хоосон байж болно.
-- assignee_id: нэрээр дурдсан хүн (бүтэн нэр, товч нэр, «Батаа» ≈ «Бат-Эрдэнэ» гэх мэт ойролцоо таарвал). «Би …» гэвэл илгээгч өөрөө. Нэр дурдаагүй бол ажлын төрлөөр хэлтэс, албан тушаалд таарах хүн (зуслан, гэрээ, ээлж → Партнершип; төлбөр, буцаалт → Санхүү; сурталчилгаа, сошиал → Маркетинг), тэр хэлтсийн даргад. Ижил боломжтой хэд байвал нээлттэй ажил цөөтэйд нь. Тодорхойгүй бол хоосон.
+- assignee_id: нэрээр дурдсан хүн (бүтэн нэр, товч нэр, «Батаа» ≈ «Бат-Эрдэнэ» гэх мэт ойролцоо таарвал). «Би …» гэвэл илгээгч өөрөө. Нэр дурдаагүй бол ажлын төрлөөр албан тушаал (job) нь таарах хүнд: зуслан, гэрээ, ээлж, зуслангийн мэдээлэл → партнершип; төлбөр, буцаалт, нэхэмжлэх → нягтлан/санхүү; сурталчилгаа, сошиал, контент → маркетинг/контент; эцэг эхийн асуулт, захиалга → үйлчилгээ/захиалга; сайтын алдаа → хөгжүүлэгч/техник. Тодорхой зуслантай холбоотой бол тэр зуслангийн хариуцагчид (owner) давуу эрх. Ижил боломжтой хэд байвал нээлттэй ажил цөөтэйд нь. Тодорхойгүй бол хоосон — админ хуваарилна.
 - priority: urgent — өнөөдөр, «яаралтай», төлбөрийн асуудал, эцэг эхийн гомдол, систем ажиллахгүй; high — энэ 7 хоногт, зуслан/гэрээтэй холбоотой чухал; medium — ердийн; low — хэзээ нэгэн цагт.
 - due_date: «өнөөдөр», «маргааш», «баасан гараг», «дараа 7 хоногт», «15-нд» гэх мэтийг өгөгдсөн өнөөдрийн огнооноос YYYY-MM-DD болго. Дурдаагүй бол urgent → өнөөдөр, high → 3 хоногийн дараа, бусад → хоосон.
 - camp_id: зуслангийн нэр дурдвал жагсаалтаас тааруул (ойролцоо бичлэг ч болно).
@@ -88,30 +87,27 @@ const term = (s: string) => s.replace(/[%_,()*\\"'.:]/g, " ").replace(/\s+/g, " 
 const likeExact = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 function contextBlock(r: AgentRequest) {
-  const deptName = new Map(r.departments.map((d) => [d.id, d.name]));
   const name = new Map(r.people.map((p) => [p.id, p.full_name]));
   const people = r.people.map((p) => ({
     id: p.id,
     name: p.full_name,
     job: p.job_title ?? "",
-    dept: p.department_id ? deptName.get(p.department_id) ?? "" : "",
     role: p.role,
     open_tasks: r.load.get(p.id) ?? 0,
   }));
-  const departments = r.departments.map((d) => ({
-    id: d.id,
-    name: d.name,
-    about: d.description ?? "",
-    head: d.head_id ? name.get(d.head_id) ?? "" : "",
+  const camps = r.camps.map((c) => ({
+    id: c.id,
+    name: c.name,
+    aimag: c.aimag ?? "",
+    stage: c.stage,
+    owner: c.owner_id ? name.get(c.owner_id) ?? "" : "",
   }));
-  const camps = r.camps.map((c) => ({ id: c.id, name: c.name, aimag: c.aimag ?? "", stage: c.stage }));
   const lines = [
     `Өнөөдөр: ${r.today} (${prettyDate(r.today)}). Маргааш: ${shiftDate(r.today, 1)}. Цагийн бүс: Улаанбаатар.`,
     `Суваг: #${r.channel.name}${r.channel.kind === "inbox" ? " (гадаад эх үүсвэрээс ирсэн мессежүүд)" : ""}`,
     r.mode === "suggest"
       ? "Горим: suggest — create_task ажлыг шууд үүсгэхгүй, санал болгож хадгална. Хариундаа «санал болголоо, батална уу» гэж дурд."
       : "Горим: auto — create_task ажлыг шууд үүсгэнэ.",
-    `Хэлтсүүд: ${JSON.stringify(departments)}`,
     `Ажилчид: ${JSON.stringify(people)}`,
     `Зуслангууд: ${JSON.stringify(camps)}`,
     `Төслүүд: ${JSON.stringify(r.projects)}`,
@@ -152,7 +148,6 @@ export async function runAgent(r: AgentRequest): Promise<AgentResult> {
 
   const peopleById = new Map(r.people.map((p) => [p.id, p]));
   const campIds = new Set(r.camps.map((c) => c.id));
-  const deptIds = new Set(r.departments.map((d) => d.id));
   const campName = new Map(r.camps.map((c) => [c.id, c.name]));
   const projectIds = new Set(r.projects.map((p) => p.id));
   const okDate = (d: string) => (ISO.test(d) && d >= shiftDate(r.today, -60) ? d : "");
@@ -227,7 +222,6 @@ export async function runAgent(r: AgentRequest): Promise<AgentResult> {
       due_date: z.string().describe("YYYY-MM-DD эсвэл хоосон"),
       camp_id: z.string().describe("Зуслангийн id эсвэл хоосон"),
       project_id: z.string().describe("Төслийн id эсвэл хоосон"),
-      department_id: z.string().describe("Хэлтсийн id эсвэл хоосон (хариуцагчийнхаар автоматаар)"),
     }),
     run: (a) =>
       serial(() =>
@@ -239,15 +233,10 @@ export async function runAgent(r: AgentRequest): Promise<AgentResult> {
           const assignee = peopleById.has(a.assignee_id) ? a.assignee_id : "";
           const camp = campIds.has(a.camp_id) ? a.camp_id : "";
           const project = projectIds.has(a.project_id) ? a.project_id : "";
-          const dept =
-            (deptIds.has(a.department_id) ? a.department_id : "") ||
-            (assignee ? peopleById.get(assignee)?.department_id ?? "" : "") ||
-            r.channel.department_id ||
-            "";
           const due = okDate(a.due_date);
 
           if (r.mode === "suggest") {
-            proposals.push({ title, description: a.description.trim(), assignee_id: assignee, priority: a.priority, due_date: due, camp_id: camp, project_id: project, department_id: dept, status: "open" });
+            proposals.push({ title, description: a.description.trim(), assignee_id: assignee, priority: a.priority, due_date: due, camp_id: camp, project_id: project, status: "open" });
             return "Санал болгон хадгаллаа — хүн «Үүсгэх» дарж батална.";
           }
 
@@ -264,7 +253,6 @@ export async function runAgent(r: AgentRequest): Promise<AgentResult> {
               assignee_id: assignee || null,
               camp_id: camp || null,
               ...(project ? { project_id: project } : {}),
-              department_id: dept || null,
               due_date: due || null,
               planned_month: due ? due.slice(0, 7) : null,
               tags: ["AI"],

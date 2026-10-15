@@ -11,7 +11,7 @@ import { Avatar, Card, PriorityChip } from "@/components/ui";
 import { PRIORITIES, PRIORITY_RANK, STATUSES } from "@/lib/constants";
 import { completeness } from "@/lib/completeness";
 import { useStore } from "@/lib/data/store";
-import { atLeast } from "@/lib/permissions";
+import { isAdmin } from "@/lib/permissions";
 import { greeting, periodStats, taskBuckets } from "@/lib/report";
 import type { Task, ZucaShift } from "@/lib/types";
 import { syncedLabel, useZucaLive, useZucaSyncNow } from "@/lib/zuca/hooks";
@@ -30,11 +30,11 @@ export default function Dashboard() {
   const [openTask, setOpenTask] = useState<Task | null>(null);
   const [draft, setDraft] = useState<TaskDraft | null>(null);
   const [openCamp, setOpenCamp] = useState<string | null>(null);
-  const lead = atLeast(me, "manager");
+  const lead = isAdmin(me);
 
   const open = tasks.filter((t) => t.status !== "done");
   const mine = open.filter((t) => t.assignee_id === me?.id);
-  // Удирдлага багийн, ажилтан өөрийн тоог харна
+  // Админ багийн, ажилтан өөрийн тоог харна
   const scope = lead ? tasks : tasks.filter((t) => t.assignee_id === me?.id);
   const scopeOpen = scope.filter((t) => t.status !== "done");
   const overdue = scopeOpen.filter((t) => isOverdue(t.due_date, false));

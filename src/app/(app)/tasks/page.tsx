@@ -12,7 +12,7 @@ import { Avatar, Button, PageHeader, Segmented, Select } from "@/components/ui";
 import { PRIORITIES, STATUSES } from "@/lib/constants";
 import { useStore } from "@/lib/data/store";
 import type { Profile, Task, TaskPriority, TaskStatus } from "@/lib/types";
-import { isAdmin, taskDeptId } from "@/lib/permissions";
+import { isAdmin } from "@/lib/permissions";
 import { addMonths, currentMonthKey, monthLabel } from "@/lib/plan";
 import { periodStats } from "@/lib/report";
 import { cn, isOverdue, todayISO } from "@/lib/utils";
@@ -35,7 +35,7 @@ export default function TasksPage() {
 }
 
 function TasksInner() {
-  const { tasks, profiles, departments, profileById, me, updateTask, createTask } = useStore();
+  const { tasks, profiles, campById, me, updateTask, createTask } = useStore();
   const params = useSearchParams();
   const [view, setView] = useState<View>(() => {
     try {
@@ -48,8 +48,8 @@ function TasksInner() {
   // /team → "энэ хүний ажлууд" холбоос ?who=<id> (эсвэл ?who=none) -оор ирнэ
   const [who, setWho] = useState<string | null>(() => params.get("who"));
   const [prio, setPrio] = useState<TaskPriority | null>(null);
-  // /departments → ?dept=<id>
-  const [dept, setDept] = useState<string>(() => params.get("dept") ?? "");
+  // Зуслангийн карт → ?camp=<id> (эсвэл none)
+  const [camp, setCamp] = useState<string>(() => params.get("camp") ?? "");
   const [overdueOnly, setOverdueOnly] = useState(false);
   // Төлөвлөгөө хуудаснаас ?month=YYYY-MM (эсвэл none) -оор ирнэ
   const [month, setMonth] = useState<string>(() => params.get("month") ?? "");
@@ -64,7 +64,7 @@ function TasksInner() {
   useEffect(() => {
     setWho(params.get("who"));
     if (params.get("month")) setMonth(params.get("month")!);
-    if (params.get("dept")) setDept(params.get("dept")!);
+    if (params.get("camp")) setCamp(params.get("camp")!);
   }, [params]);
 
   // Telegram-ын «Системд нээх» → /tasks?task=<id> — ажлыг шууд нээнэ
@@ -99,13 +99,13 @@ function TasksInner() {
       if (view === "priority" && t.status === "done") return false;
       if (who === "none" ? t.assignee_id : who && t.assignee_id !== who) return false;
       if (prio && t.priority !== prio) return false;
-      if (dept === "cross" ? !t.from_department_id : dept && taskDeptId(t, profileById) !== dept) return false;
+      if (camp === "none" ? t.camp_id : camp && t.camp_id !== camp) return false;
       if (month === "none" ? t.planned_month : month && t.planned_month !== month) return false;
       if (overdueOnly && !isOverdue(t.due_date, t.status === "done")) return false;
       if (s && !`${t.title} ${t.description ?? ""} ${t.tags.join(" ")}`.toLowerCase().includes(s)) return false;
       return true;
     });
-  }, [tasks, q, who, prio, overdueOnly, view, month, dept, profileById]);
+  }, [tasks, q, who, prio, overdueOnly, view, month, camp]);
 
   const columns: BoardColumn[] = useMemo(
     () =>
@@ -135,7 +135,16 @@ function TasksInner() {
   const todayCount = scopeOpen.filter((t) => t.due_date === todayISO()).length;
   const week = periodStats(scope, 7);
   const change = week.prevDone ? Math.round(((week.doneCount - week.prevDone) / week.prevDone) * 100) : null;
-  const hasFilter = q || who || prio || overdueOnly || month || dept;
+  const hasFilter = q || who || prio || overdueOnly || month || camp;
+  // Нээлттэй ажилтай зуслангууд — ажил ихтэй нь эхэндээ
+  const campOptions = useMemo(() => {
+    const n = new Map<string, number>();
+    for (const t of tasks) if (t.camp_id && t.status !== "done") n.set(t.camp_id, (n.get(t.camp_id) ?? 0) + 1);
+    if (camp && camp !== "none" && !n.has(camp)) n.set(camp, 0);
+    return [...n]
+      .map(([id, count]) => ({ id, count, name: campById.get(id)?.name ?? "—" }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "mn"));
+  }, [tasks, campById, camp]);
   const thisMonth = currentMonthKey();
   const monthOptions = Array.from(new Set([addMonths(thisMonth, -1), thisMonth, addMonths(thisMonth, 1), addMonths(thisMonth, 2), ...tasks.map((t) => t.planned_month).filter((m): m is string => !!m)])).sort();
 
@@ -294,20 +303,20 @@ function TasksInner() {
           <option value="none">Төлөвлөөгүй · {tasks.filter((t) => !t.planned_month && t.status !== "done").length}</option>
         </Select>
 
-        {departments.length > 0 && (
+        {campOptions.length > 0 && (
           <Select
-            className={cn(pillField, dept && "border-brand-300 bg-brand-50 text-brand-700")}
-            value={dept}
-            onChange={(e) => setDept(e.target.value)}
-            title="Хэлтсээр шүүх"
+            className={cn(pillField, "max-w-56", camp && "border-brand-300 bg-brand-50 text-brand-700")}
+            value={camp}
+            onChange={(e) => setCamp(e.target.value)}
+            title="Зуслангаар шүүх"
           >
-            <option value="">Бүх хэлтэс</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
+            <option value="">Бүх зуслан</option>
+            {campOptions.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} · {c.count}
               </option>
             ))}
-            <option value="cross">↔ Хэлтэс хоорондын хүсэлт</option>
+            <option value="none">Зуслантай холбоогүй</option>
           </Select>
         )}
 
@@ -325,7 +334,7 @@ function TasksInner() {
               setPrio(null);
               setOverdueOnly(false);
               setMonth("");
-              setDept("");
+              setCamp("");
             }}
           >
             <X size={14} /> Цэвэрлэх
@@ -349,7 +358,7 @@ function TasksInner() {
                 title,
                 position: Date.now(),
                 assignee_id: me?.id ?? null,
-                department_id: dept && dept !== "cross" ? dept : me?.department_id ?? null,
+                camp_id: camp && camp !== "none" ? camp : null,
                 planned_month: month && month !== "none" ? month : null,
                 ...(view === "status" ? { status: col as TaskStatus } : { priority: col as TaskPriority }),
               })

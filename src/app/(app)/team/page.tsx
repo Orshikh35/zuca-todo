@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, CalendarDays, Check, Crown, KeyRound, Mail, Phone, Plus, Search, Send, UserPlus, Users, X } from "lucide-react";
+import { CalendarDays, Check, KeyRound, Mail, Phone, Plus, Search, Send, UserPlus, Users, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BulkAddModal } from "@/components/team/bulk-add-modal";
@@ -9,12 +9,12 @@ import { Donut, Hero, HeroChip, heroBtn, pillField, Tile } from "@/components/be
 import { Avatar, Button, Card, Empty, PageHeader, Select } from "@/components/ui";
 import { useStore } from "@/lib/data/store";
 import { ROLES } from "@/lib/constants";
-import { atLeast, canEditProfile, isAdmin, isApproved } from "@/lib/permissions";
+import { canEditProfile, isAdmin, isApproved } from "@/lib/permissions";
 import type { Profile } from "@/lib/types";
 import { cn, isOverdue, relativeTime } from "@/lib/utils";
 
 export default function TeamPage() {
-  const { profiles: all, tasks, camps, me, departments, deptById, decideAccess } = useStore();
+  const { profiles: all, tasks, camps, me, decideAccess } = useStore();
   // Админ батлаагүй бүртгэлүүд жагсаалтад орохгүй — доорх «Бүртгэлийн хүсэлт» хэсэгт л харагдана
   const profiles = useMemo(() => all.filter(isApproved), [all]);
   const requests = all.filter((p) => !isApproved(p)).sort((a, b) => Number(b.access === "pending") - Number(a.access === "pending") || b.created_at.localeCompare(a.created_at));
@@ -25,7 +25,7 @@ export default function TeamPage() {
     setBusy(null);
   }
   const [q, setQ] = useState("");
-  const [dept, setDept] = useState("");
+  const [role, setRole] = useState<"" | Profile["role"]>("");
   const [showInactive, setShowInactive] = useState(false);
   const [modal, setModal] = useState<{ member: Profile | null } | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -36,7 +36,7 @@ export default function TeamPage() {
     const s = q.trim().toLowerCase();
     return profiles
       .filter((p) => (showInactive || p.active) && (!s || `${p.full_name} ${p.email} ${p.job_title ?? ""}`.toLowerCase().includes(s)))
-      .filter((p) => !dept || (dept === "none" ? !p.department_id : p.department_id === dept))
+      .filter((p) => !role || p.role === role)
       .map((p) => {
         const mine = tasks.filter((t) => t.assignee_id === p.id);
         const open = mine.filter((t) => t.status !== "done");
@@ -52,7 +52,7 @@ export default function TeamPage() {
         };
       })
       .sort((a, b) => b.open - a.open || a.p.full_name.localeCompare(b.p.full_name, "mn"));
-  }, [profiles, tasks, camps, q, showInactive, dept]);
+  }, [profiles, tasks, camps, q, showInactive, role]);
 
   const unassigned = tasks.filter((t) => !t.assignee_id && t.status !== "done").length;
   const inactiveCount = profiles.filter((p) => !p.active).length;
@@ -69,24 +69,14 @@ export default function TeamPage() {
               <Search size={15} className="pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2 text-zinc-400" />
               <input className={cn(pillField, "w-48 pl-9")} placeholder="Хайх…" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
-            {departments.length > 0 && (
-              <Select className={pillField} value={dept} onChange={(e) => setDept(e.target.value)}>
-                <option value="">Бүх хэлтэс</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-                <option value="none">Хэлтэсгүй</option>
-              </Select>
-            )}
-            {atLeast(me, "manager") && (
-              <>
-                <Link href="/departments" className="glass inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-medium text-zinc-700 hover:text-zinc-900">
-                  <Building2 size={15} /> Хэлтэс
-                </Link>
-              </>
-            )}
+            <Select className={pillField} value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
+              <option value="">Бүх эрх</option>
+              {ROLES.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
+            </Select>
           </>
         }
       />
@@ -148,7 +138,7 @@ export default function TeamPage() {
             </>
           }
           actions={
-            atLeast(me, "manager") ? (
+            isAdmin(me) ? (
               <>
                 <button onClick={() => setModal({ member: null })} className={heroBtn.dark}>
                   <Plus size={15} /> Ажилтан нэмэх
@@ -188,7 +178,6 @@ export default function TeamPage() {
       {/* Ажилтан бүрийн карт */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {rows.map(({ p, open, overdue, urgent, done30, camps: campCount }) => {
-          const d = p.department_id ? deptById.get(p.department_id) : null;
           const r = ROLES.find((x) => x.id === p.role) ?? ROLES[1];
           const total = open + done30;
           const pct = total ? Math.round((done30 / total) * 100) : null;
@@ -206,13 +195,6 @@ export default function TeamPage() {
                   <div className="truncate text-xs text-zinc-500">{p.job_title || "—"}</div>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <span className={cn("rounded-full px-2 py-0.5 text-[10.5px] font-semibold", r.chip)}>{r.label}</span>
-                    {d && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10.5px] text-zinc-600">
-                        <span className="size-1.5 rounded-full" style={{ background: d.color }} />
-                        {d.name}
-                        {d.head_id === p.id && <Crown size={10} className="text-amber-500" />}
-                      </span>
-                    )}
                   </div>
                 </div>
                 <Donut
@@ -280,7 +262,7 @@ export default function TeamPage() {
                   </span>
                 ) : null}
                 <Button size="sm" variant="secondary" className="ml-auto" onClick={() => setModal({ member: p })}>
-                  {canEditProfile(me, p, departments) ? "Засах" : "Харах"}
+                  {canEditProfile(me, p) ? "Засах" : "Харах"}
                 </Button>
               </div>
             </article>

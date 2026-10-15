@@ -217,7 +217,7 @@ async function handleTaskButton(q: NonNullable<Update["callback_query"]>) {
       await answer(!me ? "Таны Telegram ZUCA Ops-тэй холбогдоогүй байна" : "Ажил олдсонгүй (устгагдсан байж магадгүй)");
       return new Response("ok");
     }
-    if (task.assignee_id !== me.id && !["admin", "director"].includes(me.role as string)) {
+    if (task.assignee_id !== me.id && me.role !== "admin") {
       await answer("Энэ ажил танд оноогдоогүй байна");
       return new Response("ok");
     }

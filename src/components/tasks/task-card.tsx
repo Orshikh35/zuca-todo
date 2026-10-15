@@ -1,6 +1,6 @@
 "use client";
 
-import { AlignLeft, ArrowRightLeft, CalendarClock, Check, FolderKanban, Hand, Tent } from "lucide-react";
+import { AlignLeft, CalendarClock, Check, FolderKanban, Hand, Tent } from "lucide-react";
 import { Avatar, PriorityChip } from "@/components/ui";
 import { useStore } from "@/lib/data/store";
 import type { Task } from "@/lib/types";
@@ -29,13 +29,11 @@ export function TaskCard({
   /** Төслийн хуудсан дотор төслийн нэрийг давтахгүй */
   hideProject?: boolean;
 }) {
-  const { me, profileById, campById, deptById, projectById, updateTask } = useStore();
+  const { me, profileById, campById, projectById, updateTask } = useStore();
   const done = task.status === "done";
   const due = dueLabel(task.due_date);
   const overdue = !done && due?.tone === "overdue";
   const camp = task.camp_id ? campById.get(task.camp_id) : undefined;
-  const from = task.from_department_id ? deptById.get(task.from_department_id) : undefined;
-  const to = task.department_id ? deptById.get(task.department_id) : undefined;
   const project = !hideProject && task.project_id ? projectById.get(task.project_id) : undefined;
 
   return (
@@ -68,15 +66,6 @@ export function TaskCard({
           {task.title}
         </h4>
       </div>
-
-      {from && (
-        <div className="relative mt-2 flex items-center gap-1 truncate text-[11px] font-medium text-sky-700">
-          <ArrowRightLeft size={11} className="shrink-0" />
-          <span className="truncate">
-            {from.name} → {to?.name ?? "?"}
-          </span>
-        </div>
-      )}
 
       {project && (
         <div className="relative mt-2 flex items-center gap-1 truncate text-[11px] font-medium" style={{ color: project.color }}>

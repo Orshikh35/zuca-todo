@@ -4,7 +4,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { todayIn } from "../agent/digest";
-import type { Channel, Department, Message, Profile, Task } from "../types";
+import type { Channel, Message, Profile, Task } from "../types";
 import { aiConfigured } from "./ai";
 import { runAgent, type AgentResult, type CampLite, type ChatLine } from "./chat-agent";
 
@@ -25,7 +25,6 @@ export function shouldProcess(channel: Pick<Channel, "ai_mode" | "kind">, msg: P
 
 export interface AgentContext {
   people: Profile[];
-  departments: Department[];
   camps: CampLite[];
   /** Явагдаж буй төслүүд (v7 схемгүй бол хоосон) */
   projects: { id: string; name: string }[];
@@ -33,14 +32,13 @@ export interface AgentContext {
 }
 
 export async function loadAgentContext(sb: SupabaseClient): Promise<AgentContext> {
-  const [p, d, c, t, pj] = await Promise.all([
+  const [p, c, t, pj] = await Promise.all([
     sb.from("profiles").select("*").eq("active", true),
-    sb.from("departments").select("*").order("position"),
     sb.from("camps").select("id,name,aimag,stage,owner_id").order("name"),
     sb.from("tasks").select("assignee_id").neq("status", "done"),
     sb.from("projects").select("id,name").neq("status", "done").order("position"),
   ]);
-  const err = [p, d, c, t].find((x) => x.error)?.error;
+  const err = [p, c, t].find((x) => x.error)?.error;
   if (err) throw new Error(err.message);
   const load = new Map<string, number>();
   for (const row of t.data as { assignee_id: string | null }[]) {
@@ -48,7 +46,7 @@ export async function loadAgentContext(sb: SupabaseClient): Promise<AgentContext
   }
   // projects-ийн алдааг тоохгүй — схем v7 ажиллуулаагүй ч чат ажилласаар байна
   const projects = (pj.data ?? []) as { id: string; name: string }[];
-  return { people: p.data as Profile[], departments: d.data as Department[], camps: c.data as CampLite[], projects, load };
+  return { people: p.data as Profile[], camps: c.data as CampLite[], projects, load };
 }
 
 export function authorLabel(m: Pick<Message, "author_kind" | "author_id" | "author_name">, byId: Map<string, Profile>) {
@@ -171,7 +169,7 @@ export async function agentForProfile(sb: SupabaseClient, me: Profile, text: str
     sb,
     text,
     from: { name: me.full_name, kind: "user", profile: me, via },
-    channel: { name: via === "telegram" ? "Telegram (хувийн чат)" : "Самбар (хувийн)", kind: "team", department_id: me.department_id },
+    channel: { name: via === "telegram" ? "Telegram (хувийн чат)" : "Самбар (хувийн)", kind: "team" },
     mentioned: true,
     mode: "auto",
     history: [],

@@ -24,7 +24,7 @@ export interface Repo {
   deleteCamp(id: string): Promise<void>;
   importCamps(inputs: CampInput[]): Promise<Camp[]>;
 
-  /** Хэлтэс, хүсэлт, өдрийн тайлан, агентын түүх — ерөнхий CRUD */
+  /** Төсөл, санхүү, хүсэлт, өдрийн тайлан, санаа, агентын түүх — ерөнхий CRUD */
   list<K extends TableName>(table: K): Promise<Rows[K][]>;
   insert<K extends TableName>(table: K, input: Partial<Rows[K]>): Promise<Rows[K]>;
   patch<K extends TableName>(table: K, id: string, patch: Partial<Rows[K]>): Promise<Rows[K]>;

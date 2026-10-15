@@ -71,12 +71,10 @@ export const AIMAGS = [
   "Хэнтий",
 ];
 
-/** ZUCA-д сонгох эрх хоёр: Админ, Ажилтан. director/manager — хуучин өгөгдөлд таарах (сонгох боломжгүй) */
-export const ROLES: { id: Role; label: string; hint: string; chip: string; selectable: boolean }[] = [
-  { id: "admin", label: "Админ", hint: "Бүх ажилтны ажил, явц, тохиргоог харна", chip: "bg-neutral-900 text-white ring-neutral-900 dark:bg-white dark:text-neutral-900 dark:ring-white", selectable: true },
-  { id: "member", label: "Ажилтан", hint: "Өөрийн болон эзэнгүй ажлаа харна", chip: "bg-zinc-100 text-zinc-600 ring-zinc-200", selectable: true },
-  { id: "director", label: "Админ", hint: "Хуучин «Удирдлага» — админтай адил", chip: "bg-violet-50 text-violet-700 ring-violet-200", selectable: false },
-  { id: "manager", label: "Хэлтсийн дарга", hint: "Хуучин эрх — Админ эсвэл Ажилтан болгоно уу", chip: "bg-sky-50 text-sky-700 ring-sky-200", selectable: false },
+/** ZUCA-д эрх хоёр: Админ, Ажилтан */
+export const ROLES: { id: Role; label: string; hint: string; chip: string }[] = [
+  { id: "admin", label: "Админ", hint: "Бүх ажилтны ажил, явц, баг, санхүү, тохиргоог харна", chip: "bg-neutral-900 text-white ring-neutral-900 dark:bg-white dark:text-neutral-900 dark:ring-white" },
+  { id: "member", label: "Ажилтан", hint: "Өөрийн болон эзэнгүй ажлаа харна", chip: "bg-zinc-100 text-zinc-600 ring-zinc-200" },
 ];
 
 export const APPROVAL_KINDS: { id: ApprovalKind; label: string; hint: string; money?: boolean; dates?: boolean }[] = [
@@ -94,7 +92,7 @@ export const APPROVAL_STATUSES: { id: ApprovalStatus; label: string; chip: strin
   { id: "cancelled", label: "Цуцалсан", chip: "bg-zinc-100 text-zinc-500 ring-zinc-200" },
 ];
 
-export const DEPARTMENT_COLORS = ["#4f46e5", "#0891b2", "#ea580c", "#16a34a", "#db2777", "#7c3aed", "#ca8a04", "#0d9488", "#64748b"];
+export const PROJECT_COLORS = ["#4f46e5", "#0891b2", "#ea580c", "#16a34a", "#db2777", "#7c3aed", "#ca8a04", "#0d9488", "#64748b"];
 
 export const PROJECT_STATUSES: { id: ProjectStatus; label: string; chip: string }[] = [
   { id: "active", label: "Явагдаж буй", chip: "bg-sky-50 text-sky-700 ring-sky-200" },

@@ -10,8 +10,6 @@ import type {
   CampInput,
   DailyReport,
   DailyReportInput,
-  Department,
-  DepartmentInput,
   FileFolder,
   FinanceEntry,
   Idea,
@@ -71,14 +69,12 @@ interface Store {
   profiles: Profile[];
   tasks: Task[];
   camps: Camp[];
-  departments: Department[];
   projects: Project[];
   approvals: Approval[];
   dailyReports: DailyReport[];
   agentRuns: AgentRun[];
   profileById: Map<string, Profile>;
   campById: Map<string, Camp>;
-  deptById: Map<string, Department>;
   projectById: Map<string, Project>;
   /** Төслийн явц: дууссан / нийт ажил */
   projectProgress(id: string): ProjectProgress;
@@ -105,9 +101,6 @@ interface Store {
   deleteCamp(id: string): Promise<void>;
   importCamps(inputs: CampInput[]): Promise<number>;
 
-  createDepartment(input: DepartmentInput): Promise<Department | undefined>;
-  updateDepartment(id: string, patch: Partial<Department>): Promise<void>;
-  deleteDepartment(id: string): Promise<void>;
   createProject(input: ProjectInput): Promise<Project | undefined>;
   updateProject(id: string, patch: Partial<Project>): Promise<void>;
   /** Төслийг устгана — ажлууд нь устахгүй, зөвхөн төслөөс салгана */
@@ -163,7 +156,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [camps, setCamps] = useState<Camp[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [financeEntries, setFinanceEntries] = useState<FinanceEntry[]>([]);
   const [payroll, setPayroll] = useState<Payroll[]>([]);
@@ -189,12 +181,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Нэг query унасан ч бусад нь ачаалагдана. Ялангуяа `me` тогтоогдохгүй бол
   // Shell /login руу шидэж, middleware буцаагаад эцэс төгсгөлгүй гогцоо үүснэ.
   const refresh = useCallback(async () => {
-    const [u, p, t, c, d, a, r, g, pj, pc, fe, pr, fl, id, ir, is, ik] = await Promise.allSettled([
+    const [u, p, t, c, a, r, g, pj, pc, fe, pr, fl, id, ir, is, ik] = await Promise.allSettled([
       repo.currentUser(),
       repo.listProfiles(),
       repo.listTasks(),
       repo.listCamps(),
-      repo.list("departments"),
       repo.list("approvals"),
       repo.list("daily_reports"),
       repo.list("agent_runs"),
@@ -213,7 +204,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (p.status === "fulfilled") setProfiles(p.value);
     if (t.status === "fulfilled") setTasks(t.value);
     if (c.status === "fulfilled") setCamps(c.value);
-    if (d.status === "fulfilled") setDepartments(d.value);
     if (a.status === "fulfilled") setApprovals(a.value);
     if (r.status === "fulfilled") setDailyReports(r.value);
     if (g.status === "fulfilled") setAgentRuns(g.value);
@@ -228,7 +218,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (ik.status === "fulfilled") setIdeaStrokes(ik.value);
 
     // projects (v7) хүснэгт үүсээгүй байсан ч бусад хуудас ажилласаар байна
-    const failed = [u, p, t, c, d, a, r, g].find((x) => x.status === "rejected");
+    const failed = [u, p, t, c, a, r, g].find((x) => x.status === "rejected");
     if (failed && failed.status === "rejected") throw failed.reason;
   }, [repo]);
 
@@ -250,7 +240,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const store = useMemo<Store>(() => {
     const profileById = new Map(profiles.map((p) => [p.id, p]));
     const campById = new Map(camps.map((c) => [c.id, c]));
-    const deptById = new Map(departments.map((d) => [d.id, d]));
     const projectById = new Map(projects.map((p) => [p.id, p]));
 
     /** Ерөнхий хүснэгтийн optimistic CRUD */
@@ -284,7 +273,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         },
       };
     }
-    const deptCrud = crud("departments", setDepartments);
     const apprCrud = crud("approvals", setApprovals);
     const dailyCrud = crud("daily_reports", setDailyReports);
     const projCrud = crud("projects", setProjects);
@@ -321,13 +309,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       profiles,
       tasks: visibleTasks,
       camps,
-      departments,
       approvals,
       dailyReports,
       agentRuns,
       profileById,
       campById,
-      deptById,
       projects,
       projectById,
       projectProgress,
@@ -365,7 +351,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         // Хариуцагчийг нь UI дээр шууд салгана
         setTasks((prev) => prev.map((t) => (t.assignee_id === id ? { ...t, assignee_id: null } : t)));
         setCamps((prev) => prev.map((c) => (c.owner_id === id ? { ...c, owner_id: null } : c)));
-        setDepartments((prev) => prev.map((d) => (d.head_id === id ? { ...d, head_id: null } : d)));
         try {
           await repo.deleteProfile(id);
           toast("Ажилтан устгагдлаа");
@@ -486,25 +471,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           fail(e);
           return 0;
         }
-      },
-
-      async createDepartment(input) {
-        const d = await deptCrud.create({ position: Date.now(), ...input });
-        if (d) toast(`${d.name} хэлтэс нэмэгдлээ`);
-        return d;
-      },
-      updateDepartment: deptCrud.update,
-      async deleteDepartment(id) {
-        setProfiles((prev) => prev.map((p) => (p.department_id === id ? { ...p, department_id: null } : p)));
-        setTasks((prev) =>
-          prev.map((t) => ({
-            ...t,
-            department_id: t.department_id === id ? null : t.department_id,
-            from_department_id: t.from_department_id === id ? null : t.from_department_id,
-          })),
-        );
-        await deptCrud.remove(id);
-        toast("Хэлтэс устгагдлаа");
       },
 
       async createProject(input) {
@@ -657,7 +623,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       toast,
       dismissToast,
     };
-  }, [repo, ready, me, profiles, tasks, camps, departments, projects, projectCounts, financeEntries, payroll, files, ideas, ideaComments, ideaStickers, ideaStrokes, approvals, dailyReports, agentRuns, toasts, toast, dismissToast, refresh, fail]);
+  }, [repo, ready, me, profiles, tasks, camps, projects, projectCounts, financeEntries, payroll, files, ideas, ideaComments, ideaStickers, ideaStrokes, approvals, dailyReports, agentRuns, toasts, toast, dismissToast, refresh, fail]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

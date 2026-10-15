@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useStore } from "@/lib/data/store";
 import type { Profile, ProfileInput } from "@/lib/types";
 import { ROLES } from "@/lib/constants";
-import { atLeast, canEditProfile, canSetRole } from "@/lib/permissions";
+import { canEditProfile, canSetRole, isAdmin } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { Button, Modal, Select } from "@/components/ui";
 
@@ -21,7 +21,6 @@ const blank = {
   job_title: "",
   color: MEMBER_COLORS[0],
   role: "member" as Profile["role"],
-  department_id: "",
   telegram_chat_id: "",
   notify_email: true,
   notify_telegram: true,
@@ -30,7 +29,7 @@ const blank = {
 };
 
 export function MemberModal({ member, onClose }: { member: Profile | null; onClose: () => void }) {
-  const { createProfile, updateProfile, deleteProfile, profiles, me, tasks, departments } = useStore();
+  const { createProfile, updateProfile, deleteProfile, profiles, me, tasks } = useStore();
   const [f, setF] = useState(blank);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -48,14 +47,13 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
             job_title: member.job_title ?? "",
             color: member.color,
             role: member.role,
-            department_id: member.department_id ?? "",
             telegram_chat_id: member.telegram_chat_id ?? "",
             notify_email: member.notify_email,
             notify_telegram: member.notify_telegram,
             active: member.active,
             note: member.note ?? "",
           }
-        : { ...blank, color: MEMBER_COLORS[profiles.length % MEMBER_COLORS.length], department_id: me?.role === "manager" ? me.department_id ?? "" : "" },
+        : { ...blank, color: MEMBER_COLORS[profiles.length % MEMBER_COLORS.length] },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member, profiles.length]);
@@ -63,10 +61,10 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((p) => ({ ...p, [k]: v }));
 
   const isMe = member?.id === me?.id;
-  const editable = canEditProfile(me, member, departments);
-  // Эрх: зөвхөн дээд түвшний хүн өөрчилнө, өөрийн эрхийг өөрөө өсгөхгүй
-  const roleOptions = ROLES.filter((r) => r.id === f.role || (r.selectable && canSetRole(me, r.id) && (!member || canSetRole(me, member.role))));
-  const canDelete = member && !isMe && atLeast(me, "manager") && editable;
+  const editable = canEditProfile(me, member);
+  // Эрхийг зөвхөн админ өөрчилнө. Админ өөрийгөө ажилтан болгож түгжигдэхгүй.
+  const roleEditable = canSetRole(me) && !isMe;
+  const canDelete = member && !isMe && isAdmin(me);
   const assigned = member ? tasks.filter((t) => t.assignee_id === member.id && t.status !== "done").length : 0;
 
   async function save(e: React.FormEvent) {
@@ -87,7 +85,6 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
       job_title: f.job_title.trim() || null,
       color: f.color,
       role: f.role,
-      department_id: f.department_id || null,
       telegram_chat_id: f.telegram_chat_id.trim() || null,
       notify_email: f.notify_email,
       notify_telegram: f.notify_telegram,
@@ -172,26 +169,15 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
 
         <div className="grid gap-3.5 sm:grid-cols-2">
           <div>
-            <label className="label" htmlFor="m-dept">Хэлтэс</label>
-            <Select id="m-dept" className="field" value={f.department_id} onChange={(e) => set("department_id", e.target.value)}>
-              <option value="">— Хэлтэсгүй —</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div>
             <label className="label" htmlFor="m-role">Эрхийн түвшин</label>
             <Select
               id="m-role"
               className="field"
               value={f.role}
-              disabled={roleOptions.length < 2}
+              disabled={!roleEditable}
               onChange={(e) => set("role", e.target.value as Profile["role"])}
             >
-              {roleOptions.map((r) => (
+              {ROLES.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.label}
                 </option>
@@ -250,7 +236,7 @@ export function MemberModal({ member, onClose }: { member: Profile | null; onClo
           </p>
         )}
         {!editable && (
-          <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500">Энэ ажилтны мэдээллийг засах эрх танд алга (зөвхөн хэлтсийн дарга, удирдлага).</p>
+          <p className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-500">Энэ ажилтны мэдээллийг зөвхөн админ засна.</p>
         )}
         {err && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
       </form>

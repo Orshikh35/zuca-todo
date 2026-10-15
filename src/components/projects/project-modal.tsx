@@ -4,7 +4,7 @@ import { Check, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button, Modal, Select } from "@/components/ui";
-import { DEPARTMENT_COLORS, PROJECT_STATUSES } from "@/lib/constants";
+import { PROJECT_COLORS, PROJECT_STATUSES } from "@/lib/constants";
 import { useStore } from "@/lib/data/store";
 import { canDeleteProject } from "@/lib/permissions";
 import type { Project, ProjectStatus } from "@/lib/types";
@@ -21,7 +21,7 @@ export function ProjectModal({ open, project, onClose }: { open: boolean; projec
     return {
       name: project?.name ?? "",
       description: project?.description ?? "",
-      color: project?.color ?? DEPARTMENT_COLORS[Math.floor(Math.random() * DEPARTMENT_COLORS.length)],
+      color: project?.color ?? PROJECT_COLORS[Math.floor(Math.random() * PROJECT_COLORS.length)],
       status: project?.status ?? ("active" as ProjectStatus),
       owner_id: project ? project.owner_id ?? "" : me?.id ?? "",
       camp_id: project?.camp_id ?? "",
@@ -116,7 +116,7 @@ export function ProjectModal({ open, project, onClose }: { open: boolean; projec
         <div>
           <span className="label">Өнгө</span>
           <div className="flex flex-wrap gap-2">
-            {DEPARTMENT_COLORS.map((c) => (
+            {PROJECT_COLORS.map((c) => (
               <button
                 type="button"
                 key={c}

@@ -25,7 +25,7 @@ import type { AgentStatus } from "@/lib/agent/client";
 import { markRead, useChannels, useChatUnread, useMessages } from "@/lib/chat/hooks";
 import { STATUSES } from "@/lib/constants";
 import { useStore } from "@/lib/data/store";
-import { canManageDept, canManageOrg } from "@/lib/permissions";
+import { isAdmin } from "@/lib/permissions";
 import { getSupabaseBrowser } from "@/lib/supabase/client";
 import type { AiMode, Channel, Message, Profile, Task, TaskProposal } from "@/lib/types";
 import { cn, dueLabel } from "@/lib/utils";
@@ -79,7 +79,7 @@ export default function ChatPage() {
 }
 
 function ChatApp() {
-  const { me, deptById, toast } = useStore();
+  const { me, toast } = useStore();
   const { channels, setChannels, loading, error } = useChannels();
   const [slug, setSlug] = useState<string>(() => {
     try {
@@ -160,8 +160,7 @@ function ChatApp() {
     else toast(AI_MODES.find((m) => m.id === ai_mode)?.hint ?? "Хадгаллаа");
   }
 
-  const canEdit = (ch: Channel) =>
-    canManageOrg(me) || ch.created_by === me?.id || (!!ch.department_id && canManageDept(me, deptById.get(ch.department_id)));
+  const canEdit = (ch: Channel) => isAdmin(me) || ch.created_by === me?.id;
 
   return (
     <div className="glass flex h-[calc(100dvh-11rem)] overflow-hidden rounded-[1.75rem] lg:-my-3 lg:h-[calc(100dvh-1.5rem)]">
@@ -539,7 +538,7 @@ function MessageRow({
       ? profileById.get(replyTo.author_id ?? "")?.full_name ?? ""
       : replyTo.author_name || (replyTo.author_kind === "ai" ? "ZUCA AI" : "")
     : "";
-  const canDelete = (m.author_kind === "user" && m.author_id === me?.id) || canManageOrg(me);
+  const canDelete = (m.author_kind === "user" && m.author_id === me?.id) || isAdmin(me);
   const canTask = !temp && (m.author_kind === "user" || m.author_kind === "external");
 
   async function toTask() {
@@ -697,7 +696,6 @@ function Proposals({ m }: { m: Message }) {
         assignee_id: p.assignee_id || null,
         camp_id: p.camp_id || null,
         ...(p.project_id ? { project_id: p.project_id } : {}),
-        department_id: p.department_id || null,
         due_date: p.due_date || null,
         planned_month: p.due_date ? p.due_date.slice(0, 7) : null,
         tags: ["AI"],
@@ -862,10 +860,9 @@ function NewChannelModal({
   channels: Channel[];
   onCreated: (c: Channel) => void;
 }) {
-  const { departments, toast } = useStore();
+  const { toast } = useStore();
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
-  const [dept, setDept] = useState("");
   const [mode, setMode] = useState<AiMode>("auto");
   const [busy, setBusy] = useState(false);
 
@@ -873,7 +870,6 @@ function NewChannelModal({
     if (open) {
       setName("");
       setDesc("");
-      setDept("");
       setMode("auto");
     }
   }, [open]);
@@ -886,7 +882,7 @@ function NewChannelModal({
     for (let n = 2; channels.some((c) => c.slug === slug); n++) slug = `${base}-${n}`;
     const { data, error } = await getSupabaseBrowser()
       .from("channels")
-      .insert({ name: name.trim(), slug, description: desc.trim() || null, department_id: dept || null, ai_mode: mode, position: Date.now() })
+      .insert({ name: name.trim(), slug, description: desc.trim() || null, ai_mode: mode, position: Date.now() })
       .select()
       .single();
     setBusy(false);
@@ -921,30 +917,17 @@ function NewChannelModal({
           <label className="label">Тайлбар</label>
           <input className="field" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Энэ сувагт юу ярих вэ" />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label">Хэлтэс (заавал биш)</label>
-            <Select className="field" value={dept} onChange={(e) => setDept(e.target.value)}>
-              <option value="">—</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <div>
-            <label className="label">AI туслах</label>
-            <Select className="field" value={mode} onChange={(e) => setMode(e.target.value as AiMode)}>
-              {AI_MODES.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label.replace("AI: ", "")}
-                </option>
-              ))}
-            </Select>
-          </div>
+        <div>
+          <label className="label">AI туслах</label>
+          <Select className="field" value={mode} onChange={(e) => setMode(e.target.value as AiMode)}>
+            {AI_MODES.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label.replace("AI: ", "")}
+              </option>
+            ))}
+          </Select>
         </div>
-        <p className="text-xs text-zinc-500">{AI_MODES.find((m) => m.id === mode)?.hint}. Хэлтэс сонговол хариуцагчгүй ажил тэр хэлтэст очно.</p>
+        <p className="text-xs text-zinc-500">{AI_MODES.find((m) => m.id === mode)?.hint}.</p>
       </div>
     </Modal>
   );

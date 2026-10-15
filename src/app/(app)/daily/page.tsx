@@ -2,36 +2,24 @@
 
 import { AlertOctagon, CheckCircle2, Clock, NotebookPen, Sparkles, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Avatar, Button, Card, Empty, PageHeader, Select } from "@/components/ui";
+import { Avatar, Button, Card, Empty, PageHeader } from "@/components/ui";
 import { useStore } from "@/lib/data/store";
-import { canManageDept, canSeeDaily, visibleDeptIds } from "@/lib/permissions";
+import { canSeeDaily, isAdmin } from "@/lib/permissions";
 import type { Profile } from "@/lib/types";
 import { addDays, cn, toISODate, todayISO } from "@/lib/utils";
 
 const WD = ["Ня", "Да", "Мя", "Лх", "Пү", "Ба", "Бя"];
 
 export default function DailyPage() {
-  const { me, profiles, departments, dailyReports, profileById, deptById } = useStore();
+  const { me, profiles, dailyReports, profileById } = useStore();
   const [date, setDate] = useState(todayISO());
-  const [dept, setDept] = useState("");
 
-  const visible = visibleDeptIds(me, departments);
-  const manages = departments.some((d) => canManageDept(me, d));
-
-  // Миний харж болох хүмүүс (өөрөө + удирддаг хэлтсийнх)
-  const team = useMemo(
-    () =>
-      profiles.filter(
-        (p) =>
-          p.active &&
-          (p.id === me?.id || (manages && (visible === null || (p.department_id && visible.has(p.department_id))))) &&
-          (!dept || p.department_id === dept),
-      ),
-    [profiles, me, manages, visible, dept],
-  );
+  // Админ бүх багийг, ажилтан өөрийгөө л харна
+  const manages = isAdmin(me);
+  const team = useMemo(() => profiles.filter((p) => p.active && (manages || p.id === me?.id)), [profiles, me, manages]);
 
   const reports = dailyReports
-    .filter((r) => r.date === date && canSeeDaily(me, r, profileById, departments) && team.some((p) => p.id === r.profile_id))
+    .filter((r) => r.date === date && canSeeDaily(me, r) && team.some((p) => p.id === r.profile_id))
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
   const missing = team.filter((p) => !reports.some((r) => r.profile_id === p.id));
 
@@ -41,7 +29,7 @@ export default function DailyPage() {
     <>
       <PageHeader
         title="Өдрийн тайлан"
-        subtitle="Өдөр бүр юу хийсэн, маргааш юу хийх, юу саад болж байгааг богино бичнэ — дарга, удирдлага нэг дороос харна"
+        subtitle="Өдөр бүр юу хийсэн, маргааш юу хийх, юу саад болж байгааг богино бичнэ — админ нэг дороос харна"
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,420px)_1fr]">
@@ -55,18 +43,6 @@ export default function DailyPage() {
                   <h2 className="text-[15px] font-semibold">Сүүлийн 7 хоног</h2>
                   <p className="mt-0.5 text-xs text-zinc-500">Хэн тайлангаа өгсөн · нүдэн дээр дарж тухайн өдрийг харна</p>
                 </div>
-                {departments.length > 1 && (
-                  <Select className="field h-8 w-auto py-0 text-xs" value={dept} onChange={(e) => setDept(e.target.value)}>
-                    <option value="">Бүх хэлтэс</option>
-                    {departments
-                      .filter((d) => visible === null || visible.has(d.id))
-                      .map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.name}
-                        </option>
-                      ))}
-                  </Select>
-                )}
               </div>
               <div className="scroll-thin overflow-x-auto px-5 pb-4">
                 <table className="text-sm">
@@ -147,14 +123,13 @@ export default function DailyPage() {
               <ul className="divide-y divide-zinc-100">
                 {reports.map((r) => {
                   const p = profileById.get(r.profile_id);
-                  const d = p?.department_id ? deptById.get(p.department_id) : null;
                   return (
                     <li key={r.id} className="px-5 py-4">
                       <div className="flex items-center gap-2.5">
                         <Avatar profile={p} size={28} />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium">{p?.full_name}</div>
-                          <div className="text-[11px] text-zinc-400">{[p?.job_title, d?.name].filter(Boolean).join(" · ")}</div>
+                          <div className="text-[11px] text-zinc-400">{p?.job_title}</div>
                         </div>
                         {r.hours != null && (
                           <span className="tabular inline-flex items-center gap-1 text-xs text-zinc-500">

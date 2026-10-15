@@ -129,7 +129,7 @@ function PeriodPicker({
 
 /* ─────────── Тайлан ─────────── */
 function Overview({ period }: { period: { kind: PeriodKind; anchor: string; months: string[] } }) {
-  const { financeEntries, payroll, profiles, profileById, departments, deptById, projectById } = useStore();
+  const { financeEntries, payroll, profiles, profileById, projectById } = useStore();
   const { kind, anchor, months } = period;
 
   const r = useMemo(() => {
@@ -155,14 +155,15 @@ function Overview({ period }: { period: { kind: PeriodKind; anchor: string; mont
       .filter((x) => x.value)
       .sort((a, b) => b.value - a.value);
 
-    // Хэлтэс: зардлын хэлтэс + цалинг ажилтны хэлтсээр
-    const deptTotals = new Map<string, number>();
-    const addDept = (id: string | null | undefined, v: number) => deptTotals.set(id ?? "", (deptTotals.get(id ?? "") ?? 0) + v);
-    exp.forEach((e) => addDept(e.department_id, e.amount));
-    P.forEach((p) => addDept(profileById.get(p.profile_id)?.department_id, payrollCost(p)));
-    const byDept = [...deptTotals]
-      .map(([id, value]) => ({ label: id ? deptById.get(id)?.name ?? "—" : "Хэлтэсгүй", value }))
-      .sort((a, b) => b.value - a.value);
+    // Хэнд хамгийн их төлсөн: зардлын «Хэнд» талбараар (хоосон бол ангиллаар), цалин нэг мөр
+    const payeeTotals = new Map<string, number>();
+    const addPayee = (label: string, v: number) => payeeTotals.set(label, (payeeTotals.get(label) ?? 0) + v);
+    exp.forEach((e) => addPayee(e.vendor?.trim() || financeCategoryLabel("expense", e.category), e.amount));
+    if (salary) addPayee("Ажилчдын цалин", salary);
+    const byPayee = [...payeeTotals]
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
 
     const projTotals = new Map<string, number>();
     exp.filter((e) => e.project_id).forEach((e) => projTotals.set(e.project_id!, (projTotals.get(e.project_id!) ?? 0) + e.amount));
@@ -183,8 +184,8 @@ function Overview({ period }: { period: { kind: PeriodKind; anchor: string; mont
       })
       .sort((a, b) => b.cost - a.cost);
 
-    return { E, P, salary, other, income, prevExp, byCategory, incomeByCategory, byDept, byProject, people };
-  }, [financeEntries, payroll, months, kind, anchor, profileById, deptById, projectById]);
+    return { E, P, salary, other, income, prevExp, byCategory, incomeByCategory, byPayee, byProject, people };
+  }, [financeEntries, payroll, months, kind, anchor, profileById, projectById]);
 
   // Сүүлийн 12 сар — сонгосон үеийн сүүлийн сараар төгсөнө
   const trend = useMemo(() => {
@@ -209,7 +210,7 @@ function Overview({ period }: { period: { kind: PeriodKind; anchor: string; mont
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const lines = [["Төрөл", "Огноо / Сар", "Ангилал", "Гарчиг", "Дүн", "Хэнд / хэнээс", "Хэлтэс", "Төсөл", "Ажилтан"].join(",")];
+    const lines = [["Төрөл", "Огноо / Сар", "Ангилал", "Гарчиг", "Дүн", "Хэнд / хэнээс", "Төсөл", "Ажилтан"].join(",")];
     r.E.forEach((e) =>
       lines.push(
         [
@@ -219,7 +220,6 @@ function Overview({ period }: { period: { kind: PeriodKind; anchor: string; mont
           e.title,
           e.amount,
           e.vendor,
-          e.department_id ? deptById.get(e.department_id)?.name : "",
           e.project_id ? projectById.get(e.project_id)?.name : "",
           e.profile_id ? profileById.get(e.profile_id)?.full_name : "",
         ]
@@ -229,7 +229,7 @@ function Overview({ period }: { period: { kind: PeriodKind; anchor: string; mont
     );
     r.P.forEach((p) =>
       lines.push(
-        ["Цалин", p.month, PAYROLL_CATEGORY.label, `Цалин — ${profileById.get(p.profile_id)?.full_name ?? ""}`, payrollCost(p), "", "", "", profileById.get(p.profile_id)?.full_name]
+        ["Цалин", p.month, PAYROLL_CATEGORY.label, `Цалин — ${profileById.get(p.profile_id)?.full_name ?? ""}`, payrollCost(p), "", "", profileById.get(p.profile_id)?.full_name]
           .map(esc)
           .join(","),
       ),
@@ -311,8 +311,8 @@ function Overview({ period }: { period: { kind: PeriodKind; anchor: string; mont
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        <Panel title="Хэлтэс тус бүр" sub="Зардал + ажилтнуудын цалин">
-          <BarList rows={r.byDept.map((x) => ({ ...x, color: SERIES[1] }))} format={money} empty="Өгөгдөл алга" />
+        <Panel title="Хэнд хамгийн их төлсөн" sub="Зардал + цалин, эхний 8">
+          <BarList rows={r.byPayee.map((x) => ({ ...x, color: SERIES[1] }))} format={money} empty="Өгөгдөл алга" />
         </Panel>
         <Panel title="Төслийн зардал" sub="Төсөлтэй холбосон зардал">
           {r.byProject.length ? (
@@ -354,7 +354,7 @@ function Overview({ period }: { period: { kind: PeriodKind; anchor: string; mont
             <thead>
               <tr className="border-y border-zinc-100 text-left text-[11px] font-semibold tracking-wide text-zinc-400 uppercase">
                 <th className="px-5 py-2">Ажилтан</th>
-                <th className="px-3 py-2">Хэлтэс</th>
+                <th className="px-3 py-2">Албан тушаал</th>
                 <th className="px-3 py-2 text-right">Нийт цалин</th>
                 <th className="px-3 py-2 text-right">Гарт олгох</th>
                 <th className="px-3 py-2 text-right">Байгууллагад туссан</th>
@@ -371,7 +371,7 @@ function Overview({ period }: { period: { kind: PeriodKind; anchor: string; mont
                       {x.months > 1 && <span className="text-xs text-zinc-400">· {x.months} сар</span>}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-zinc-500">{x.profile?.department_id ? deptById.get(x.profile.department_id)?.name : "—"}</td>
+                  <td className="px-3 py-2.5 text-zinc-500">{x.profile?.job_title || "—"}</td>
                   <td className="tabular px-3 py-2.5 text-right">{money(x.gross)}</td>
                   <td className="tabular px-3 py-2.5 text-right">{money(x.net)}</td>
                   <td className="tabular px-3 py-2.5 text-right font-semibold">{money(x.cost)}</td>
@@ -407,7 +407,6 @@ function Overview({ period }: { period: { kind: PeriodKind; anchor: string; mont
         </div>
       </Card>
 
-      {departments.length === 0 && <p className="mt-3 text-xs text-zinc-400">Хэлтэс үүсгэвэл хэлтэс тус бүрийн зардал гарна.</p>}
     </>
   );
 }

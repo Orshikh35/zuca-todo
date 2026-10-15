@@ -23,13 +23,13 @@ import { agentFetch, type AgentStatus } from "@/lib/agent/client";
 import { buildDigest, digestHtml, digestTelegram, type OrgSnapshot } from "@/lib/agent/digest";
 import type { AgentPlan } from "@/lib/agent/schema";
 import { useStore } from "@/lib/data/store";
-import { atLeast, canManageOrg, canNotify } from "@/lib/permissions";
+import { canNotify, isAdmin } from "@/lib/permissions";
 import type { Task } from "@/lib/types";
 import { cn, relativeTime, todayISO } from "@/lib/utils";
 
 export default function AgentPage() {
   const store = useStore();
-  const { me, mode, profiles, tasks, departments, approvals, dailyReports, agentRuns, profileById, updateProfile, logAgentRun, toast } = store;
+  const { me, mode, profiles, tasks, approvals, dailyReports, agentRuns, profileById, updateProfile, logAgentRun, toast } = store;
 
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [personId, setPersonId] = useState<string>("");
@@ -51,13 +51,13 @@ export default function AgentPage() {
   }, [me, personId]);
 
   const snapshot = useCallback(
-    (): OrgSnapshot => ({ profiles, tasks, departments, approvals, daily_reports: dailyReports }),
-    [profiles, tasks, departments, approvals, dailyReports],
+    (): OrgSnapshot => ({ profiles, tasks, approvals, daily_reports: dailyReports }),
+    [profiles, tasks, approvals, dailyReports],
   );
   const ctx = { mode, me, snapshot };
 
   const person = profileById.get(personId) ?? me;
-  const reachable = useMemo(() => profiles.filter((p) => p.active && canNotify(me, p, departments)), [profiles, me, departments]);
+  const reachable = useMemo(() => profiles.filter((p) => p.active && canNotify(me, p)), [profiles, me]);
   const digest = useMemo(
     () => (person ? buildDigest(snapshot(), person, todayISO(), planFor === person.id ? plan : null) : null),
     [person, snapshot, plan, planFor],
@@ -301,8 +301,8 @@ function StatusStrip({ status, className }: { status: AgentStatus | null; classN
 }
 
 function SendPanel({ status, ctx, withPlan }: { status: AgentStatus | null; ctx: Ctx; withPlan: boolean }) {
-  const { me, profiles, departments, logAgentRun, toast, mode } = useStore();
-  type Scope = "me" | "dept" | "all";
+  const { me, profiles, logAgentRun, toast, mode } = useStore();
+  type Scope = "me" | "all";
   const [scope, setScope] = useState<Scope>("me");
   const [channels, setChannels] = useState<{ email: boolean; telegram: boolean }>({ email: true, telegram: true });
   const [withAi, setWithAi] = useState(true);
@@ -312,13 +312,12 @@ function SendPanel({ status, ctx, withPlan }: { status: AgentStatus | null; ctx:
   const targets = profiles.filter(
     (p) =>
       p.active &&
-      canNotify(me, p, departments) &&
-      (scope === "me" ? p.id === me?.id : scope === "dept" ? p.department_id && p.department_id === me?.department_id : true),
+      canNotify(me, p) &&
+      (scope === "me" ? p.id === me?.id : true),
   );
   const scopes: { id: Scope; label: string }[] = [
     { id: "me", label: "Өөртөө" },
-    ...(me?.department_id ? [{ id: "dept" as const, label: "Хэлтэстээ" }] : []),
-    ...(canManageOrg(me) ? [{ id: "all" as const, label: "Бүх ажилтанд" }] : []),
+    ...(isAdmin(me) ? [{ id: "all" as const, label: "Бүх ажилтанд" }] : []),
   ];
 
   async function send() {
@@ -453,7 +452,7 @@ function MyChannels({ status, ctx, onToggle }: { status: AgentStatus | null; ctx
           Demo горимд bot-оор холбох боломжгүй (өгөгдөл browser-т). Telegram-д bot-оо эхлүүлээд <code>/id</code> гэж бичиж авсан chat ID-гаа «Ажилчид» → засах хэсэгт оруулна.
         </p>
       )}
-      {atLeast(me, "manager") && status?.bot && ctx.mode === "supabase" && (
+      {isAdmin(me) && status?.bot && ctx.mode === "supabase" && (
         <div className="border-t border-zinc-100 px-5 py-3 text-xs text-zinc-500">
           <div className="mb-1.5 font-medium text-zinc-700">Багийнхнаа олноор холбох</div>
           Энэ холбоосыг багийн группт илгээнэ. Ажилтан бүр <b>Start</b> → <b>«📱 Утасны дугаараа илгээх»</b> дарахад «Ажилчид» хэсэгт

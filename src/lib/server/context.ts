@@ -45,19 +45,17 @@ export async function sessionClient() {
 
 export async function loadSnapshot(sb: SupabaseClient): Promise<OrgSnapshot> {
   const since = shiftDate(todayIn(), -14);
-  const [p, t, d, a, r] = await Promise.all([
+  const [p, t, a, r] = await Promise.all([
     sb.from("profiles").select("*"),
     sb.from("tasks").select("*").neq("status", "done"),
-    sb.from("departments").select("*").order("position"),
     sb.from("approvals").select("*").eq("status", "pending"),
     sb.from("daily_reports").select("*").gte("date", since),
   ]);
-  const err = [p, t, d, a, r].find((x) => x.error)?.error;
+  const err = [p, t, a, r].find((x) => x.error)?.error;
   if (err) throw new HttpError(500, err.message);
   return {
     profiles: p.data as Profile[],
     tasks: t.data!,
-    departments: d.data!,
     approvals: a.data!,
     daily_reports: r.data!,
   };

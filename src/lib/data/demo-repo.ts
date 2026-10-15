@@ -2,7 +2,8 @@
  * Demo горим: Supabase тохируулаагүй үед browser-ийн localStorage дээр ажиллана.
  */
 import { SEED_CAMPS, SEED_PEOPLE, SEED_TASKS } from "../seed-data";
-import type { AgentRun, Approval, Camp, DailyReport, Department, FinanceEntry, Idea, IdeaComment, IdeaSticker, IdeaStroke, Payroll, Profile, ProfileInput, Project, Rows, StoredFile, TableName, Task } from "../types";
+import type { AgentRun, Approval, Camp, DailyReport, FinanceEntry, Idea, IdeaComment, IdeaSticker, IdeaStroke, Payroll, Profile, ProfileInput, Project, Rows, StoredFile, TableName, Task } from "../types";
+import { approverFor } from "../permissions";
 import { addDays, toISODate, uid } from "../utils";
 import type { Repo } from "./repo";
 
@@ -12,7 +13,6 @@ interface DB {
   profiles: Profile[];
   tasks: Task[];
   camps: Camp[];
-  departments: Department[];
   projects: Project[];
   finance_entries: FinanceEntry[];
   payroll: Payroll[];
@@ -49,7 +49,6 @@ function blankProfile(input: ProfileInput): Profile {
     job_title: null,
     color: PALETTE[Math.floor(Math.random() * PALETTE.length)],
     role: "member",
-    department_id: null,
     telegram_chat_id: null,
     notify_email: true,
     notify_telegram: true,
@@ -64,61 +63,35 @@ function blankProfile(input: ProfileInput): Profile {
 }
 const daysAgo = (n: number) => addDays(new Date(), -n).toISOString();
 
-/** Жишээ байгууллагын бүтэц. dept = SEED_DEPARTMENTS-ийн index */
-const SEED_DEPARTMENTS = [
-  { name: "Удирдлага", code: "EXEC", color: "#4f46e5", description: "Гүйцэтгэх удирдлага, стратеги" },
-  { name: "Партнершип", code: "PART", color: "#0891b2", description: "Зуслангуудтай хамтын ажиллагаа, гэрээ" },
-  { name: "Маркетинг", code: "MKT", color: "#ea580c", description: "Сурталчилгаа, сошиал, контент" },
-  { name: "Санхүү", code: "FIN", color: "#16a34a", description: "Төлбөр, тооцоо, зардал" },
-  { name: "Хүний нөөц", code: "HR", color: "#db2777", description: "Ажилтан, цалин, сургалт" },
+/** Жишээ ZUCA баг — хэлтэсгүй, албан тушаалаар ажил чиглүүлнэ */
+const SEED_ORG: { job: string; role: Profile["role"] }[] = [
+  { job: "Үүсгэн байгуулагч, гүйцэтгэх захирал", role: "admin" },
+  { job: "Партнершип менежер", role: "member" },
+  { job: "Маркетингийн менежер", role: "member" },
+  { job: "Контент бүтээгч", role: "member" },
 ];
-const SEED_ORG: { job: string; dept: number; role: Profile["role"] }[] = [
-  { job: "Үүсгэн байгуулагч, гүйцэтгэх захирал", dept: 0, role: "admin" },
-  { job: "Партнершип менежер", dept: 1, role: "manager" },
-  { job: "Маркетингийн менежер", dept: 2, role: "manager" },
-  { job: "Контент бүтээгч", dept: 2, role: "member" },
-];
-const EXTRA_PEOPLE: (ProfileInput & { dept: number })[] = [
-  { full_name: "Болд", email: "bold@zuca.mn", color: "#ca8a04", role: "manager", job_title: "Ерөнхий нягтлан", dept: 3 },
-  { full_name: "Ану", email: "anu@zuca.mn", color: "#7c3aed", role: "manager", job_title: "Хүний нөөцийн менежер", dept: 4 },
-  { full_name: "Мөнх", email: "munkh@zuca.mn", color: "#0d9488", role: "member", job_title: "Партнершип ажилтан", dept: 1 },
-  { full_name: "Сарнай", email: "sarnai@zuca.mn", color: "#64748b", role: "director", job_title: "Үйл ажиллагаа хариуцсан захирал", dept: 0 },
+const EXTRA_PEOPLE: ProfileInput[] = [
+  { full_name: "Болд", email: "bold@zuca.mn", color: "#ca8a04", role: "member", job_title: "Нягтлан бодогч" },
+  { full_name: "Ану", email: "anu@zuca.mn", color: "#7c3aed", role: "member", job_title: "Эцэг эхийн үйлчилгээ, захиалга" },
+  { full_name: "Мөнх", email: "munkh@zuca.mn", color: "#0d9488", role: "member", job_title: "Партнершип ажилтан" },
+  { full_name: "Сарнай", email: "sarnai@zuca.mn", color: "#64748b", role: "admin", job_title: "Үйл ажиллагаа хариуцсан захирал" },
 ];
 
 export function buildSeed(): DB {
-  const departments: Department[] = SEED_DEPARTMENTS.map((d, i) => ({
-    id: uid(),
-    head_id: null,
-    parent_id: null,
-    position: (i + 1) * 1000,
-    created_at: daysAgo(90),
-    updated_at: daysAgo(90),
-    ...d,
-  }));
-  departments.slice(1).forEach((d) => (d.parent_id = departments[0].id));
-
   const profiles: Profile[] = [
     ...SEED_PEOPLE.map((p, i) => ({
       ...blankProfile(p),
       job_title: SEED_ORG[i]?.job ?? null,
       role: SEED_ORG[i]?.role ?? "member",
-      department_id: departments[SEED_ORG[i]?.dept ?? 0].id,
       created_at: daysAgo(60),
       updated_at: daysAgo(60),
     })),
-    ...EXTRA_PEOPLE.map(({ dept, ...p }) => ({
+    ...EXTRA_PEOPLE.map((p) => ({
       ...blankProfile(p),
-      department_id: departments[dept].id,
       created_at: daysAgo(50),
       updated_at: daysAgo(50),
     })),
   ];
-  // Дарга нь тухайн хэлтсийн хамгийн өндөр эрхтэй хүн
-  const rank = { admin: 3, director: 2, manager: 1, member: 0 };
-  departments.forEach((d) => {
-    const head = profiles.filter((p) => p.department_id === d.id).sort((a, b) => rank[b.role] - rank[a.role])[0];
-    d.head_id = head?.id ?? null;
-  });
   const campIds = new Map<string, string>();
 
   const camps: Camp[] = SEED_CAMPS.map((c, i) => {
@@ -171,8 +144,6 @@ export function buildSeed(): DB {
       position: (i + 1) * 1000,
       assignee_id: t.assignee == null ? null : profiles[t.assignee].id,
       camp_id: t.camp ? campIds.get(t.camp) ?? null : null,
-      department_id: t.assignee == null ? null : profiles[t.assignee].department_id,
-      from_department_id: null,
       due_date:
         t.planMonths != null
           ? null
@@ -197,32 +168,29 @@ export function buildSeed(): DB {
     };
   });
 
-  // Хэлтэс хоорондын ажил — өөр хэлтсээс ирсэн хүсэлт
-  const [exec, part, mkt, fin, hr] = departments;
+  // Багийн бусад гишүүдийн ажил
   const byEmail = (e: string) => profiles.find((p) => p.email === e)!;
-  const cross: [string, Department, Department, Profile | null, Task["priority"], number][] = [
-    ["Намрын аяны сурталчилгааны төсөв батлуулах", fin, mkt, byEmail("bold@zuca.mn"), "high", 2],
-    ["Шинэ 5 зуслангийн гэрээний загвар хянах", exec, part, byEmail("sarnai@zuca.mn"), "medium", 4],
-    ["Зуслангийн танилцуулга видеонд зураг авалт зохион байгуулах", mkt, part, byEmail("munkh@zuca.mn"), "medium", 6],
-    ["Улирлын ажилтнуудын гэрээ бэлтгэх", hr, exec, byEmail("anu@zuca.mn"), "urgent", 1],
-    ["9-р сарын борлуулалтын орлогын тайлан", fin, exec, byEmail("bold@zuca.mn"), "high", -1],
+  const extra: [string, Profile | null, Task["priority"], number, string[]][] = [
+    ["Намрын аяны сурталчилгааны төсөв батлуулах", byEmail("bold@zuca.mn"), "high", 2, ["санхүү"]],
+    ["Шинэ 5 зуслангийн гэрээний загвар хянах", byEmail("sarnai@zuca.mn"), "medium", 4, ["гэрээ"]],
+    ["Зуслангийн танилцуулга видеонд зураг авалт зохион байгуулах", byEmail("munkh@zuca.mn"), "medium", 6, ["контент"]],
+    ["Эцэг эхийн давхар төлбөрийн 3 гомдлыг шийдвэрлэх", byEmail("anu@zuca.mn"), "urgent", 1, ["эцэг эх"]],
+    ["9-р сарын захиалгын шимтгэлийн орлогын тайлан", byEmail("bold@zuca.mn"), "high", -1, ["санхүү"]],
   ];
-  cross.forEach(([title, to, from, who, priority, due], i) => {
+  extra.forEach(([title, who, priority, due, tags], i) => {
     const d = toISODate(addDays(new Date(), due));
     tasks.push({
       id: uid(),
       title,
-      description: `${from.name} хэлтсээс ирсэн хүсэлт`,
+      description: null,
       status: i === 2 ? "in_progress" : "todo",
       priority,
       position: (tasks.length + 1) * 1000,
       assignee_id: who?.id ?? null,
       camp_id: null,
-      department_id: to.id,
-      from_department_id: from.id,
       due_date: d,
       planned_month: d.slice(0, 7),
-      tags: ["хэлтэс хооронд"],
+      tags,
       completed_at: null,
       created_by: profiles[0].id,
       created_at: daysAgo(3),
@@ -238,8 +206,7 @@ export function buildSeed(): DB {
       amount: null,
       start_date: null,
       end_date: null,
-      department_id: req.department_id,
-      approver_id: departments.find((d) => d.id === req.department_id)?.head_id ?? profiles[0].id,
+      approver_id: approverFor(req, profiles),
       status: "pending",
       decision_note: null,
       decided_at: null,
@@ -277,17 +244,16 @@ export function buildSeed(): DB {
 
   const projects = seedProjects(profiles, tasks);
 
-  const { finance_entries, payroll } = seedFinance(profiles, departments, projects);
+  const { finance_entries, payroll } = seedFinance(profiles, projects);
 
-  return { profiles, tasks, camps, departments, projects, finance_entries, payroll, files: [], approvals, daily_reports, agent_runs: [], ...seedIdeas(profiles), session: null };
+  return { profiles, tasks, camps, projects, finance_entries, payroll, files: [], approvals, daily_reports, agent_runs: [], ...seedIdeas(profiles), session: null };
 }
 
 /** Жишээ санхүү: сүүлийн 6 сарын цалин, зардал, орлого */
-function seedFinance(profiles: Profile[], departments: Department[], projects: Project[]) {
+function seedFinance(profiles: Profile[], projects: Project[]) {
   const finance_entries: FinanceEntry[] = [];
   const payroll: Payroll[] = [];
   const admin = profiles.find((p) => p.role === "admin") ?? profiles[0];
-  const dept = (code: string) => departments.find((d) => d.code === code)?.id ?? null;
   const salaries = [3_500_000, 2_400_000, 2_200_000, 1_800_000, 2_600_000, 2_300_000, 1_900_000, 3_000_000];
   const at = (n: number, day: number) => {
     const d = new Date();
@@ -331,7 +297,6 @@ function seedFinance(profiles: Profile[], departments: Department[], projects: P
         date: at(back, day),
         vendor: null,
         description: null,
-        department_id: null,
         project_id: null,
         profile_id: null,
         approval_id: null,
@@ -341,14 +306,14 @@ function seedFinance(profiles: Profile[], departments: Department[], projects: P
         ...extra,
       });
     add("expense", "rent", "Оффисын түрээс", 2_800_000, 5, { vendor: "Central Tower" });
-    add("expense", "software", "Сервер, домэйн", 420_000 + back * 10_000, 8, { department_id: dept("EXEC") });
-    add("expense", "marketing", "Facebook сурталчилгаа", 900_000 + (5 - back) * 150_000, 12, { department_id: dept("MKT"), vendor: "Meta" });
-    add("expense", "transport", "Зуслан шалгах шатахуун", 250_000 + (back % 3) * 80_000, 18, { department_id: dept("PART") });
+    add("expense", "software", "Сервер, домэйн", 420_000 + back * 10_000, 8);
+    add("expense", "marketing", "Facebook сурталчилгаа", 900_000 + (5 - back) * 150_000, 12, { vendor: "Meta" });
+    add("expense", "transport", "Зуслан шалгах шатахуун", 250_000 + (back % 3) * 80_000, 18);
     add("expense", "utilities", "Цахилгаан, интернэт", 310_000, 20);
     add("income", "commission", "zuca.mn захиалгын шимтгэл", 6_500_000 + (5 - back) * 1_200_000, 27, { vendor: "zuca.mn" });
     if (back % 2 === 0) add("income", "partner", "Зуслангийн байршуулалтын төлбөр", 1_500_000, 15);
     if (back <= 1 && projects[0]) {
-      add("expense", "event", "Тайз, дуу хоолойн түрээс — урьдчилгаа", 1_200_000, 22, { project_id: projects[0].id, department_id: dept("MKT") });
+      add("expense", "event", "Тайз, дуу хоолойн түрээс — урьдчилгаа", 1_200_000, 22, { project_id: projects[0].id });
     }
   }
   return { finance_entries, payroll };
@@ -394,8 +359,6 @@ function seedProjects(profiles: Profile[], tasks: Task[]): Project[] {
       assignee_id: p?.id ?? null,
       camp_id: null,
       project_id: project.id,
-      department_id: p?.department_id ?? null,
-      from_department_id: null,
       due_date: d,
       planned_month: d.slice(0, 7),
       tags: ["100 жил"],
@@ -462,19 +425,15 @@ function seedIdeas(profiles: Profile[]): Pick<DB, "ideas" | "idea_comments" | "i
   };
 }
 
-/** Хуучин demo өгөгдлийг шинэ бүтцэд оруулна (хэлтэсгүй хувилбараас) */
+/** Хуучин demo өгөгдлийг шинэ бүтцэд оруулна */
 function migrate(d: DB): DB {
-  if (!d.departments) {
-    const seed = buildSeed();
-    d.departments = seed.departments;
-    d.approvals = [];
-    d.daily_reports = [];
-  }
+  d.approvals ??= [];
+  d.daily_reports ??= [];
   d.agent_runs ??= [];
   // v7: төсөл нэмэгдсэн — хуучин demo-д жишээ төслийг нэмнэ
   if (!d.projects) d.projects = seedProjects(d.profiles, d.tasks);
   // v8: санхүү, файл
-  if (!d.finance_entries) Object.assign(d, seedFinance(d.profiles, d.departments, d.projects));
+  if (!d.finance_entries) Object.assign(d, seedFinance(d.profiles, d.projects));
   d.files ??= [];
   // v9: санааны самбар
   if (!d.ideas) Object.assign(d, seedIdeas(d.profiles));
@@ -488,15 +447,25 @@ function migrate(d: DB): DB {
     c.y ??= NOTE_PIN_Y;
   });
   d.profiles.forEach((p) => {
-    p.department_id ??= null;
     p.telegram_chat_id ??= null;
     p.notify_email ??= true;
     p.notify_telegram ??= true;
   });
-  d.tasks.forEach((t) => {
-    t.department_id ??= null;
-    t.from_department_id ??= null;
-  });
+  // v11: хэлтэс хасагдсан, эрх хоёр болсон (удирдлага → админ, хэлтсийн дарга → ажилтан)
+  const legacy = d as DB & { departments?: unknown };
+  if (legacy.departments) {
+    delete legacy.departments;
+    const strip = (rows: object[], ...keys: string[]) => rows.forEach((r) => keys.forEach((k) => delete (r as Record<string, unknown>)[k]));
+    d.profiles.forEach((p) => {
+      const role = p.role as string;
+      if (role === "director") p.role = "admin";
+      else if (role !== "admin") p.role = "member";
+    });
+    strip(d.profiles, "department_id");
+    strip(d.tasks, "department_id", "from_department_id");
+    strip(d.approvals, "department_id");
+    strip(d.finance_entries, "department_id");
+  }
   return d;
 }
 
@@ -596,9 +565,6 @@ export function createDemoRepo(): Repo {
       d.camps.forEach((c) => {
         if (c.owner_id === id) c.owner_id = null;
       });
-      d.departments.forEach((x) => {
-        if (x.head_id === id) x.head_id = null;
-      });
       if (d.session === id) d.session = null;
       // Supabase-ийн cascade / set null-тэй адил
       d.payroll = d.payroll.filter((x) => x.profile_id !== id);
@@ -623,8 +589,6 @@ export function createDemoRepo(): Repo {
         position: Date.now(),
         assignee_id: null,
         camp_id: null,
-        department_id: null,
-        from_department_id: null,
         due_date: null,
         planned_month: null,
         tags: [],
@@ -721,8 +685,8 @@ export function createDemoRepo(): Repo {
     async list<K extends TableName>(table: K) {
       const rows = db()[table] as Rows[K][];
       return delay(
-        table === "departments" || table === "projects"
-          ? [...rows].sort((a, b) => (a as Department | Project).position - (b as Department | Project).position)
+        table === "projects"
+          ? [...rows].sort((a, b) => (a as Project).position - (b as Project).position)
           : [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at)),
       );
     },
@@ -744,16 +708,6 @@ export function createDemoRepo(): Repo {
       const rows = d[table] as { id: string }[];
       const idx = rows.findIndex((x) => x.id === id);
       if (idx >= 0) rows.splice(idx, 1);
-      if (table === "departments") {
-        // Supabase-ийн "on delete set null"-тэй адил
-        d.profiles.forEach((p) => p.department_id === id && (p.department_id = null));
-        d.tasks.forEach((t) => {
-          if (t.department_id === id) t.department_id = null;
-          if (t.from_department_id === id) t.from_department_id = null;
-        });
-        d.departments.forEach((x) => x.parent_id === id && (x.parent_id = null));
-        d.approvals.forEach((a) => a.department_id === id && (a.department_id = null));
-      }
       if (table === "projects") {
         d.tasks.forEach((t) => t.project_id === id && (t.project_id = null));
         d.finance_entries.forEach((e) => e.project_id === id && (e.project_id = null));

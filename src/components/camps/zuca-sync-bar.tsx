@@ -4,7 +4,7 @@ import { ExternalLink, RefreshCw } from "lucide-react";
 import { useCallback } from "react";
 import { Hero, HeroChip, heroBtn } from "@/components/bento";
 import { useStore } from "@/lib/data/store";
-import { atLeast } from "@/lib/permissions";
+import { isAdmin } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { syncedLabel, useZucaLive, useZucaSyncNow } from "@/lib/zuca/hooks";
 
@@ -14,7 +14,7 @@ export function ZucaSyncBar({ className }: { className?: string }) {
   const { sync, shifts, available, reload } = useZucaLive();
   const after = useCallback(() => Promise.all([reload(), refresh().catch(() => {})]), [reload, refresh]);
   const { busy, run } = useZucaSyncNow(after, toast);
-  const lead = atLeast(me, "manager");
+  const lead = isAdmin(me);
   const at = syncedLabel(sync?.at);
   const open = shifts.filter((s) => s.is_open && !s.is_day).length;
   const dayCount = shifts.filter((s) => s.is_open && s.is_day).length;

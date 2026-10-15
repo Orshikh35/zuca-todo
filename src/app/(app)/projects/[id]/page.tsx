@@ -104,12 +104,10 @@ function ProjectInner() {
   async function addQuick() {
     const title = quick.title.trim();
     if (!title || !project) return;
-    const assignee = quick.assignee_id ? profileById.get(quick.assignee_id) : undefined;
     await createTask({
       title,
       project_id: project.id,
       assignee_id: quick.assignee_id || null,
-      department_id: assignee?.department_id ?? null,
       camp_id: project.camp_id,
       due_date: quick.due_date || null,
       planned_month: quick.due_date ? quick.due_date.slice(0, 7) : null,
@@ -312,7 +310,6 @@ function ProjectInner() {
                   project_id: project.id,
                   camp_id: project.camp_id,
                   assignee_id: me?.id ?? null,
-                  department_id: me?.department_id ?? null,
                   position: Date.now(),
                   source: "manual",
                 })

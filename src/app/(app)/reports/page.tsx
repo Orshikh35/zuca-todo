@@ -9,8 +9,8 @@ import { FIELD_CHECKS, completeness } from "@/lib/completeness";
 import { download } from "@/lib/csv";
 import { OWNERSHIPS, PRIORITIES, STAGES, STATUSES } from "@/lib/constants";
 import { useStore } from "@/lib/data/store";
+import type { Task } from "@/lib/types";
 import { inRange, periodStats, taskBuckets } from "@/lib/report";
-import { taskDeptId } from "@/lib/permissions";
 import { cn, isOverdue, toISODate, todayISO } from "@/lib/utils";
 
 type Range = "7" | "30" | "90";
@@ -19,8 +19,18 @@ type Range = "7" | "30" | "90";
 const STAGE_RAMP = ["#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281"];
 const PRIORITY_HEX: Record<string, string> = { urgent: "#d03b3b", high: "#ec835a", medium: "#2a78d6", low: "#a1a1aa" };
 
+/** tasks.source — ажил хаанаас үүссэн */
+const SOURCES: Record<string, { label: string; color: string }> = {
+  manual: { label: "Гараар", color: "#a1a1aa" },
+  chat: { label: "Чат (AI)", color: "#7c5cff" },
+  intake: { label: "Ирсэн хүсэлт (zuca.mn, имэйл)", color: "#ec835a" },
+  telegram: { label: "Telegram (AI)", color: "#2a9fd6" },
+  dashboard: { label: "Самбар (AI)", color: "#4f46e5" },
+  auto: { label: "Автомат (синк, cron)", color: "#16a34a" },
+};
+
 export default function ReportsPage() {
-  const { tasks, camps, profiles, campById, departments, profileById } = useStore();
+  const { tasks, camps, profiles, campById } = useStore();
   const [range, setRange] = useState<Range>("30");
   const days = Number(range);
 
@@ -45,26 +55,31 @@ export default function ReportsPage() {
   );
   const maxDone = Math.max(1, ...people.map((r) => r.done));
 
-  // Хэлтэс бүрийн гүйцэтгэл
-  const deptRows = useMemo(() => {
-    return departments.map((d) => {
-      const own = tasks.filter((t) => taskDeptId(t, profileById) === d.id);
-      const o = own.filter((t) => t.status !== "done");
-      const done = own.filter((t) => inRange(t.completed_at, stats.from));
-      const withDue = done.filter((t) => t.due_date);
-      const onTime = withDue.filter((t) => toISODate(new Date(t.completed_at!)) <= t.due_date!).length;
-      const members = profiles.filter((p) => p.active && p.department_id === d.id);
-      return {
-        d,
-        members: members.length,
-        open: o.length,
-        overdue: o.filter((t) => isOverdue(t.due_date, false)).length,
-        done: done.length,
-        onTimePct: withDue.length ? Math.round((onTime / withDue.length) * 100) : null,
-        incoming: own.filter((t) => t.from_department_id && inRange(t.created_at, stats.from)).length,
-      };
-    });
-  }, [departments, tasks, profiles, profileById, stats.from]);
+  // Ажил хаанаас орж ирсэн бэ — гараар, чатын AI, гадаад хүсэлт (zuca.mn, имэйл), автомат синк
+  const sourceRows = useMemo(() => {
+    const m = new Map<string, Task[]>();
+    for (const t of tasks) {
+      if (!inRange(t.created_at, stats.from)) continue;
+      const key = SOURCES[t.source ?? ""] ? t.source! : "manual";
+      m.set(key, [...(m.get(key) ?? []), t]);
+    }
+    return [...m]
+      .map(([key, list]) => {
+        const done = list.filter((t) => t.status === "done");
+        const withDue = done.filter((t) => t.due_date && t.completed_at);
+        const onTime = withDue.filter((t) => toISODate(new Date(t.completed_at!)) <= t.due_date!).length;
+        return {
+          key,
+          ...SOURCES[key],
+          created: list.length,
+          open: list.length - done.length,
+          overdue: list.filter((t) => t.status !== "done" && isOverdue(t.due_date, false)).length,
+          done: done.length,
+          onTimePct: withDue.length ? Math.round((onTime / withDue.length) * 100) : null,
+        };
+      })
+      .sort((a, b) => b.created - a.created);
+  }, [tasks, stats.from]);
 
   const scored = camps.map((c) => ({ c, ...completeness(c) }));
   const activeish = scored.filter((x) => x.c.stage !== "inactive");
@@ -99,15 +114,14 @@ export default function ReportsPage() {
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
-    const head = ["Гарчиг", "Төлөв", "Яаралтай байдал", "Хариуцагч", "Хэлтэс", "Хүсэлт гаргасан", "Зуслан", "Хугацаа", "Дууссан", "Үүссэн", "Шошго"];
+    const head = ["Гарчиг", "Төлөв", "Яаралтай байдал", "Хариуцагч", "Эх үүсвэр", "Зуслан", "Хугацаа", "Дууссан", "Үүссэн", "Шошго"];
     const rows = tasks.map((t) =>
       [
         t.title,
         STATUSES.find((s) => s.id === t.status)?.label,
         PRIORITIES.find((p) => p.id === t.priority)?.label,
         profiles.find((p) => p.id === t.assignee_id)?.full_name,
-        departments.find((d) => d.id === taskDeptId(t, profileById))?.name,
-        departments.find((d) => d.id === t.from_department_id)?.name,
+        SOURCES[t.source ?? ""]?.label ?? SOURCES.manual.label,
         t.camp_id ? campById.get(t.camp_id)?.name : "",
         t.due_date,
         t.completed_at?.slice(0, 10),
@@ -239,38 +253,36 @@ export default function ReportsPage() {
         </Panel>
       </div>
 
-      {deptRows.length > 0 && (
-        <Panel title="Хэлтсүүд" sub={`Сүүлийн ${days} хоног`} className="mt-4" flush>
+      {sourceRows.length > 0 && (
+        <Panel title="Ажил хаанаас ирсэн" sub={`Сүүлийн ${days} хоногт үүссэн`} className="mt-4" flush>
           <div className="scroll-thin overflow-x-auto">
             <table className="w-full min-w-[640px] text-sm">
               <thead className="border-y border-zinc-100 text-xs text-zinc-500">
                 <tr>
-                  <th className="py-2.5 pl-5 text-left font-medium">Хэлтэс</th>
-                  <th className="px-3 text-right font-medium">Хүн</th>
+                  <th className="py-2.5 pl-5 text-left font-medium">Эх үүсвэр</th>
+                  <th className="px-3 text-right font-medium">Үүссэн</th>
                   <th className="px-3 text-right font-medium">Нээлттэй</th>
                   <th className="px-3 text-right font-medium">Хэтэрсэн</th>
                   <th className="px-3 text-right font-medium">Дууссан</th>
-                  <th className="px-3 text-right font-medium">Хугацаандаа</th>
-                  <th className="px-5 text-right font-medium">Ирсэн хүсэлт</th>
+                  <th className="px-5 text-right font-medium">Хугацаандаа</th>
                 </tr>
               </thead>
               <tbody className="tabular divide-y divide-zinc-100">
-                {deptRows.map((r) => (
-                  <tr key={r.d.id}>
+                {sourceRows.map((r) => (
+                  <tr key={r.key}>
                     <td className="py-2.5 pl-5">
                       <span className="inline-flex items-center gap-2 font-medium">
-                        <span className="size-2.5 rounded-full" style={{ background: r.d.color }} />
-                        {r.d.name}
+                        <span className="size-2.5 rounded-full" style={{ background: r.color }} />
+                        {r.label}
                       </span>
                     </td>
-                    <td className="px-3 text-right text-zinc-500">{r.members}</td>
+                    <td className="px-3 text-right font-semibold">{r.created}</td>
                     <td className="px-3 text-right">{r.open}</td>
                     <td className={cn("px-3 text-right", r.overdue ? "font-semibold text-red-600" : "text-zinc-300")}>{r.overdue}</td>
-                    <td className="px-3 text-right font-semibold">{r.done}</td>
-                    <td className={cn("px-3 text-right", r.onTimePct == null ? "text-zinc-300" : r.onTimePct >= 80 ? "text-emerald-700" : r.onTimePct >= 50 ? "text-amber-700" : "text-red-600")}>
+                    <td className="px-3 text-right">{r.done}</td>
+                    <td className={cn("px-5 text-right", r.onTimePct == null ? "text-zinc-300" : r.onTimePct >= 80 ? "text-emerald-700" : r.onTimePct >= 50 ? "text-amber-700" : "text-red-600")}>
                       {r.onTimePct == null ? "—" : `${r.onTimePct}%`}
                     </td>
-                    <td className="px-5 text-right text-zinc-600">{r.incoming || <span className="text-zinc-300">0</span>}</td>
                   </tr>
                 ))}
               </tbody>

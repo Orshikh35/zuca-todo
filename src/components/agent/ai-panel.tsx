@@ -41,7 +41,7 @@ const EXAMPLES = ["Бат маргааш Хөх тэнгэрт залгаж на
 
 /** Самбарын AI туслах: өнөөдрийн төлөвлөгөө + AI-д шууд хэлэх */
 export function AiPanel({ onOpenTask, className }: { onOpenTask: (t: Task) => void; className?: string }) {
-  const { me, mode, profiles, tasks, departments, approvals, dailyReports, logAgentRun, toast } = useStore();
+  const { me, mode, profiles, tasks, approvals, dailyReports, logAgentRun, toast } = useStore();
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [cached, setCached] = useState<Cached | null>(null);
   const [thinking, setThinking] = useState(false);
@@ -69,8 +69,8 @@ export function AiPanel({ onOpenTask, className }: { onOpenTask: (t: Task) => vo
   );
 
   const snapshot = useCallback(
-    (): OrgSnapshot => ({ profiles, tasks, departments, approvals, daily_reports: dailyReports }),
-    [profiles, tasks, departments, approvals, dailyReports],
+    (): OrgSnapshot => ({ profiles, tasks, approvals, daily_reports: dailyReports }),
+    [profiles, tasks, approvals, dailyReports],
   );
 
   const organize = useCallback(async () => {

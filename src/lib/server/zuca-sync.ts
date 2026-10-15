@@ -6,7 +6,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { prettyDate, shiftDate, todayIn } from "../agent/digest";
-import type { Camp, Department, Task } from "../types";
+import { pickByJob } from "../permissions";
+import type { Camp, Profile, Task } from "../types";
 import { notifyAssignee } from "./task-notify";
 import { mapCamp, mapShifts, nameKey, type ZCamp } from "./zuca-map";
 
@@ -151,10 +152,15 @@ export async function syncZuca(sb: SupabaseClient, opts: { manual?: boolean; act
     .sort((a, b) => a.booked / a.capacity - b.booked / b.capacity)
     .slice(0, 5);
 
-  // Шинэ зуслан → Партнершипийн даргад шалгах ажил
+  // Шинэ зуслан → албан тушаал нь «партнершип» хүнд (хэд байвал ажил цөөтэйд нь) шалгах ажил
   if (added.length && !firstRun) {
-    const { data: depts } = await sb.from("departments").select("*");
-    const part = (depts as Department[] | null)?.find((d) => (d.code ?? "").toUpperCase() === "PART" || /партнер/i.test(d.name));
+    const [{ data: people }, { data: open }] = await Promise.all([
+      sb.from("profiles").select("*").eq("active", true),
+      sb.from("tasks").select("assignee_id").neq("status", "done"),
+    ]);
+    const load = new Map<string, number>();
+    for (const t of (open ?? []) as { assignee_id: string | null }[]) if (t.assignee_id) load.set(t.assignee_id, (load.get(t.assignee_id) ?? 0) + 1);
+    const part = pickByJob((people ?? []) as Profile[], /партн[её]р|partner/i, load);
     const due = shiftDate(today, 2);
     const rows = added.map((c, i) => ({
       title: `zuca.mn-д шинэ зуслан: ${c.name} — профайл, гэрээг шалгах`,
@@ -162,8 +168,7 @@ export async function syncZuca(sb: SupabaseClient, opts: { manual?: boolean; act
       priority: "high",
       status: "todo",
       camp_id: c.id,
-      assignee_id: part?.head_id ?? null,
-      department_id: part?.id ?? null,
+      assignee_id: part?.id ?? null,
       due_date: due,
       planned_month: due.slice(0, 7),
       tags: ["zuca.mn", "auto"],

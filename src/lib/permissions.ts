@@ -1,19 +1,13 @@
-import type { Approval, DailyReport, Department, Profile, Project, Role, Task } from "./types";
+import type { Approval, DailyReport, Profile, Project, Task } from "./types";
 
 /**
  * Эрхийн дүрэм — UI-д юу харуулах/идэвхжүүлэхийг шийднэ.
- * Supabase дээр ижил дүрмийг RLS + trigger (supabase/schema.sql, v4) давхар хамгаална.
- */
-const RANK: Record<Role, number> = { admin: 3, director: 2, manager: 1, member: 0 };
-
-export const atLeast = (me: Profile | null | undefined, role: Role) => !!me && RANK[me.role] >= RANK[role];
-
-/**
- * ZUCA-д хоёр эрх: Админ (бүх ажилтны ажил, явцыг харна) ба Ажилтан.
+ * Supabase дээр ижил дүрмийг RLS + trigger (supabase/schema.sql) давхар хамгаална.
+ *
+ * ZUCA-д хоёр эрх: Админ (бүх ажилтны ажил, явц, баг, санхүү, тохиргоо) ба Ажилтан.
  * Ажилтан зөвхөн өөрт оноогдсон, өөрийн үүсгэсэн болон эзэнгүй ажлыг харна.
- * (director — хуучин «Удирдлага», админтай адил тооцно)
  */
-export const isAdmin = (me: Profile | null | undefined) => !!me && (me.role === "admin" || me.role === "director");
+export const isAdmin = (me: Pick<Profile, "role"> | null | undefined) => !!me && me.role === "admin";
 
 /** Админ баталсан эсэх. Demo-гийн хуучин өгөгдөлд талбар байхгүй бол батлагдсанд тооцно. */
 export const isApproved = (p: Profile | null | undefined) => !!p && (p.access ?? "approved") === "approved";
@@ -33,79 +27,45 @@ export function canDeleteProject(me: Profile | null | undefined, p: Pick<Project
   return isAdmin(me) || (!!me && p.created_by === me.id);
 }
 
-/** Байгууллагын бүтэц (хэлтэс, эрх) засах */
-export const canManageOrg = (me: Profile | null | undefined) => atLeast(me, "director");
+/** Эрх өөрчлөх — зөвхөн админ */
+export const canSetRole = (me: Profile | null | undefined) => isAdmin(me);
 
-/** Хүний эрхийн түвшин өөрчлөх — зөвхөн админ, эсвэл удирдлага өөрөөсөө доош */
-export function canSetRole(me: Profile | null | undefined, target: Role) {
+/** Ажилтны мэдээлэл засах: админ бүгдийг, ажилтан өөрийгөө. target = null бол шинээр нэмэх */
+export function canEditProfile(me: Profile | null | undefined, target: Profile | null | undefined) {
   if (!me) return false;
-  if (me.role === "admin") return true;
-  return me.role === "director" && target === "member";
+  return isAdmin(me) || (!!target && target.id === me.id);
 }
 
-/** Тухайн хэлтсийг удирдах эрхтэй эсэх (дарга нь эсвэл удирдлага) */
-export function canManageDept(me: Profile | null | undefined, dept: Department | null | undefined) {
-  if (!me || !dept) return false;
-  if (canManageOrg(me)) return true;
-  return dept.head_id === me.id || (me.role === "manager" && me.department_id === dept.id);
-}
-
-/** Ажилтны мэдээлэл засах: өөрийгөө, эсвэл өөрийн хэлтсийн гишүүнийг (дарга), эсвэл бүгдийг (удирдлага) */
-export function canEditProfile(me: Profile | null | undefined, target: Profile | null | undefined, depts: Department[]) {
-  if (!me) return false;
-  if (!target) return atLeast(me, "manager");
-  if (me.id === target.id || canManageOrg(me)) return true;
-  const dept = depts.find((d) => d.id === target.department_id);
-  return canManageDept(me, dept);
-}
-
-/** Харах боломжтой хэлтсийн id-ууд. null = бүгдийг */
-export function visibleDeptIds(me: Profile | null | undefined, depts: Department[]): Set<string> | null {
-  if (!me) return new Set();
-  if (canManageOrg(me)) return null;
-  const ids = new Set<string>();
-  for (const d of depts) if (canManageDept(me, d)) ids.add(d.id);
-  if (me.department_id) ids.add(me.department_id);
-  return ids;
-}
-
-/**
- * Хүсэлтийг хэн батлах вэ: хэлтсийн дарга → (дарга өөрөө бол) удирдлага → админ.
- * Хүн өөрийн хүсэлтийг өөрөө батлахгүй.
- */
-export function approverFor(requester: Profile, depts: Department[], profiles: Profile[]): string | null {
-  const dept = depts.find((d) => d.id === requester.department_id);
-  if (dept?.head_id && dept.head_id !== requester.id) return dept.head_id;
-  const pick = (role: Role) => profiles.find((p) => p.active && p.role === role && p.id !== requester.id)?.id;
-  return pick("director") ?? pick("admin") ?? null;
+/** Хүсэлтийг батлах админ — хүсэгчээс өөр, идэвхтэй, батлагдсан эхний админ */
+export function approverFor(requester: Profile, profiles: Profile[]): string | null {
+  return profiles.find((p) => p.active && isAdmin(p) && isApproved(p) && p.id !== requester.id)?.id ?? null;
 }
 
 export function canDecide(me: Profile | null | undefined, a: Approval) {
   if (!me || a.status !== "pending" || a.requester_id === me.id) return false;
-  return a.approver_id === me.id || me.role === "admin" || (me.role === "director" && !a.approver_id);
+  return a.approver_id === me.id || isAdmin(me);
 }
 
-export function canSeeApproval(me: Profile | null | undefined, a: Approval, depts: Department[]) {
+export function canSeeApproval(me: Profile | null | undefined, a: Approval) {
   if (!me) return false;
-  if (a.requester_id === me.id || a.approver_id === me.id || canManageOrg(me)) return true;
-  return canManageDept(me, depts.find((d) => d.id === a.department_id));
+  return a.requester_id === me.id || a.approver_id === me.id || isAdmin(me);
 }
 
-export function canSeeDaily(me: Profile | null | undefined, r: DailyReport, profiles: Map<string, Profile>, depts: Department[]) {
-  if (!me) return false;
-  if (r.profile_id === me.id || canManageOrg(me)) return true;
-  const author = profiles.get(r.profile_id);
-  return canManageDept(me, depts.find((d) => d.id === author?.department_id));
+export function canSeeDaily(me: Profile | null | undefined, r: DailyReport) {
+  return !!me && (r.profile_id === me.id || isAdmin(me));
 }
 
-/** Хэнд агентаар өдрийн ажил илгээж болох вэ */
-export function canNotify(me: Profile | null | undefined, target: Profile, depts: Department[]) {
-  if (!me) return false;
-  if (me.id === target.id || canManageOrg(me)) return true;
-  return canManageDept(me, depts.find((d) => d.id === target.department_id));
+/** Хэнд агентаар өдрийн ажил илгээж болох вэ: өөртөө, админ бүгдэд */
+export function canNotify(me: Profile | null | undefined, target: Profile) {
+  return !!me && (me.id === target.id || isAdmin(me));
 }
 
-/** Ажлын хэлтсийг тодорхойлно: ажлын өөрийнх → хариуцагчийнх */
-export function taskDeptId(t: Task, profileById: Map<string, Profile>) {
-  return t.department_id ?? (t.assignee_id ? profileById.get(t.assignee_id)?.department_id ?? null : null);
+/**
+ * Албан тушаалаар хариуцагч олно (жишээ нь /партнер/ → партнершипийн менежер).
+ * Хэд таарвал нээлттэй ажил цөөтэйг нь сонгоно. Хэлтэсгүй ZUCA-д ажлыг чиглүүлэх гол арга.
+ */
+export function pickByJob(profiles: Profile[], re: RegExp, load?: Map<string, number>): Profile | null {
+  const hits = profiles.filter((p) => p.active && isApproved(p) && p.job_title && re.test(p.job_title));
+  if (!hits.length) return null;
+  return hits.sort((a, b) => (load?.get(a.id) ?? 0) - (load?.get(b.id) ?? 0))[0];
 }

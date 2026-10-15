@@ -33,7 +33,7 @@ import { completeness } from "@/lib/completeness";
 import { ROLES } from "@/lib/constants";
 import { resetDemo } from "@/lib/data/demo-repo";
 import { useStore } from "@/lib/data/store";
-import { atLeast, isAdmin, isApproved } from "@/lib/permissions";
+import { isAdmin, isApproved } from "@/lib/permissions";
 import { useTheme, type ThemePref } from "@/lib/theme";
 import { cn, isOverdue } from "@/lib/utils";
 import { Avatar } from "./ui";
@@ -75,7 +75,7 @@ type NavItem = { href: string; label: string; short: string; icon: typeof Users;
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const store = useStore();
-  const { ready, me, mode, tasks, camps, deptById } = store;
+  const { ready, me, mode, tasks, camps } = store;
   const path = usePathname();
   const router = useRouter();
   const [sheet, setSheet] = useState(false);
@@ -126,8 +126,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     (t) => t.assignee_id === me.id && (t.priority === "urgent" || isOverdue(t.due_date, false)),
   ).length;
   const incomplete = camps.filter((c) => c.stage !== "inactive" && !completeness(c).complete).length;
-  const lead = atLeast(me, "manager");
-  // Санхүү, цалин, файл — зөвхөн админ (ажилтанд цэс ч харагдахгүй)
+  // Баг, тайлан, санхүү — зөвхөн админ (ажилтанд цэс ч харагдахгүй)
   const admin = isAdmin(me);
 
   const nav: NavItem[] = [
@@ -138,23 +137,22 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { href: "/calendar", label: "Календарь", short: "Календарь", icon: CalendarDays },
     { href: "/plan", label: "Төлөвлөгөө", short: "Төлөвлөгөө", icon: CalendarRange },
     { href: "/ideas", label: "Санаа", short: "Санаа", icon: Lightbulb },
-    { href: "/camps", label: "Зуслангууд", short: "Зуслан", icon: Tent, badge: lead ? incomplete : undefined, tone: "bg-amber-400 text-amber-950", mobile: true },
-    ...(lead
+    { href: "/camps", label: "Зуслангууд", short: "Зуслан", icon: Tent, badge: admin ? incomplete : undefined, tone: "bg-amber-400 text-amber-950", mobile: true },
+    ...(admin
       ? [
-          { href: "/team", label: "Баг", short: "Баг", icon: Users, badge: admin ? store.profiles.filter((p) => p.access === "pending").length : undefined, tone: "bg-amber-400 text-amber-950" },
+          { href: "/team", label: "Баг", short: "Баг", icon: Users, badge: store.profiles.filter((p) => p.access === "pending").length, tone: "bg-amber-400 text-amber-950" },
           { href: "/reports", label: "Тайлан", short: "Тайлан", icon: BarChart3 },
+          { href: "/finance", label: "Санхүү", short: "Санхүү", icon: Wallet },
         ]
       : []),
-    ...(admin ? [{ href: "/finance", label: "Санхүү", short: "Санхүү", icon: Wallet }] : []),
     { href: "/agent", label: "AI туслах", short: "AI", icon: Sparkles },
   ];
   const isActive = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
-  const myDept = me.department_id ? deptById.get(me.department_id) : null;
-  const roleLabel = `${ROLES.find((r) => r.id === me.role)?.label ?? ""}${myDept ? ` · ${myDept.name}` : ""}`;
+  const roleLabel = [ROLES.find((r) => r.id === me.role)?.label, me.job_title].filter(Boolean).join(" · ");
 
   const groups: { title: string; items: NavItem[] }[] = [
     { title: "Ажил", items: nav.filter((n) => ["/", "/chat", "/tasks", "/projects", "/calendar", "/plan", "/ideas", "/camps"].includes(n.href)) },
-    ...(lead || admin ? [{ title: "Удирдлага", items: nav.filter((n) => ["/team", "/reports", "/finance"].includes(n.href)) }] : []),
+    ...(admin ? [{ title: "Удирдлага", items: nav.filter((n) => ["/team", "/reports", "/finance"].includes(n.href)) }] : []),
     { title: "Туслах", items: nav.filter((n) => n.href === "/agent") },
   ];
 
