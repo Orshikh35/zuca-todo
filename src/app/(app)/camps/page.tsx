@@ -162,7 +162,7 @@ export default function CampsPage() {
               <Download size={15} /> Экспорт
             </Button>
             <Button variant="primary" onClick={() => setCreating(true)}>
-              <Plus size={16} /> Зуслан нэмэх
+              <Plus size={16} /> Зуслан нэмэх ооеээ
             </Button>
           </>
         }
