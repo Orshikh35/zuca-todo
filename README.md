@@ -121,6 +121,45 @@ Telegram bot-д энгийн текст ────┼───► create_task 
 
 Demo горимд (Supabase-гүй) AI цэгцлэлт, гараар илгээх нь локал орчинд ажиллана; cron болон bot-ын холболт Supabase шаардана.
 
+## Гадаад системээс ажил үүсгэх API (v11)
+
+Өөр компанийн todo, CRM гэх мэт системийг ZUCA Ops-той холбоно. `/api/intake`-ээс ялгаатай нь **AI-гүй** — өгсөн талбараар нь шууд ажил үүсгэнэ.
+
+1. Supabase → SQL Editor → `supabase/schema.sql`-ийг дахин Run (v11: `tasks.external_ref`).
+2. Env: `TASKS_API_KEY` (хамтрагч бүрт тусдаа бол таслалаар), `SUPABASE_SERVICE_ROLE_KEY`, `APP_URL`.
+
+```bash
+curl -X POST "$APP_URL/api/v1/tasks" \
+  -H "Authorization: Bearer $TASKS_API_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "title": "Хөх тэнгэр зуслантай гэрээ байгуулах",
+    "description": "Намрын ээлжийн гэрээ",
+    "priority": "high",
+    "due_date": "2026-10-20",
+    "assignee_email": "bat@zuca.mn",
+    "zuca_camp_id": 12,
+    "tags": ["гэрээ"],
+    "source": "acme",
+    "external_id": "ACME-123"
+  }'
+```
+
+| Талбар | Утга |
+|---|---|
+| `title` | **Заавал**, 200 тэмдэгт хүртэл |
+| `description` | Дэлгэрэнгүй |
+| `status` | `todo` (анхдагч) · `in_progress` · `review` · `done` |
+| `priority` | `urgent` · `high` · `medium` (анхдагч) · `low` |
+| `due_date` / `planned_month` | `YYYY-MM-DD` / `YYYY-MM` (сарыг өгөөгүй бол хугацаанаас) |
+| `assignee_email` эсвэл `assignee_id` | Ажилтан. Олдохгүй бол хариуцагчгүй үүсч `warnings`-д бичигдэнэ |
+| `zuca_camp_id`, `camp_id` эсвэл `camp` (нэр) | Зуслан |
+| `project_id` | Төсөл |
+| `tags` | Шошго (`API` болон `source` автоматаар нэмэгдэнэ) |
+| `source` + `external_id` | Илгээгч систем ба тэнд дэх id — **ижил хос дахин ирвэл шинээр үүсгэхгүй** (`200 {duplicate: true}`) |
+| `notify` | `false` бол хариуцагчид Telegram мэдэгдэл явуулахгүй |
+
+Хариу: `201 { ok, task, url, warnings? }` · `200 { ok, duplicate: true, task, url }` · `401` түлхүүр буруу · `422 { error: "validation", issues: [{ field, message }] }`. Ажлын `source` нь `api:<source>` болж, **Тайлан → Ажил хаанаас ирсэн**-д «Гадаад систем (API)» гэж харагдана.
+
 ## Бодит өгөгдөл ба ангилал
 
 | Талбар | Утга |
@@ -160,7 +199,8 @@ src/
   app/(app)/          самбар, tasks, plan, daily, team, approvals, camps, reports, finance, agent
   app/(app)/chat/     Slack шиг чат: сувгууд, AI ажлын карт, санал, эх үүсвэр холбох заавар
   app/api/chat/       send (мессеж + AI after()), process («Ажил болгох» / дахин оролдох)
-  app/api/intake/     гадаад эх үүсвэрийн webhook (имэйл, zuca.mn, Facebook)
+  app/api/intake/     гадаад эх үүсвэрийн webhook (имэйл, zuca.mn, Facebook) — AI ажил болгоно
+  app/api/v1/tasks/   гадаад системээс ажил шууд үүсгэх API (TASKS_API_KEY)
   app/api/agent/      organize (AI цэгцлэлт), send (одоо илгээх), status
   app/api/cron/daily  өглөөний автомат илгээлт
   app/api/telegram/   webhook (bot командууд), link (холбох), setup

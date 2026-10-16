@@ -27,6 +27,7 @@ const SOURCES: Record<string, { label: string; color: string }> = {
   telegram: { label: "Telegram (AI)", color: "#2a9fd6" },
   dashboard: { label: "Самбар (AI)", color: "#4f46e5" },
   auto: { label: "Автомат (синк, cron)", color: "#16a34a" },
+  api: { label: "Гадаад систем (API)", color: "#0d9488" },
 };
 
 export default function ReportsPage() {
@@ -60,7 +61,8 @@ export default function ReportsPage() {
     const m = new Map<string, Task[]>();
     for (const t of tasks) {
       if (!inRange(t.created_at, stats.from)) continue;
-      const key = SOURCES[t.source ?? ""] ? t.source! : "manual";
+      const src = t.source?.startsWith("api:") ? "api" : t.source ?? "";
+      const key = SOURCES[src] ? src : "manual";
       m.set(key, [...(m.get(key) ?? []), t]);
     }
     return [...m]
@@ -121,7 +123,7 @@ export default function ReportsPage() {
         STATUSES.find((s) => s.id === t.status)?.label,
         PRIORITIES.find((p) => p.id === t.priority)?.label,
         profiles.find((p) => p.id === t.assignee_id)?.full_name,
-        SOURCES[t.source ?? ""]?.label ?? SOURCES.manual.label,
+        t.source?.startsWith("api:") ? `API · ${t.source.slice(4)}` : SOURCES[t.source ?? ""]?.label ?? SOURCES.manual.label,
         t.camp_id ? campById.get(t.camp_id)?.name : "",
         t.due_date,
         t.completed_at?.slice(0, 10),
