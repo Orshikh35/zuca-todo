@@ -52,10 +52,8 @@ export interface Task {
   planned_month: string | null;
   tags: string[];
   completed_at: string | null;
-  /** Хаанаас үүссэн: manual · chat · intake · auto · api / api:<систем> (v5-аас өмнөх мөрөнд байхгүй) */
+  /** Хаанаас үүссэн: manual · chat · intake · auto (v5-аас өмнөх мөрөнд байхгүй) */
   source?: string | null;
-  /** Гадаад системийн ажлын id — POST /api/v1/tasks (v11) */
-  external_ref?: string | null;
   /** Чатын аль мессежээс AI үүсгэсэн */
   source_message_id?: string | null;
   created_by: string | null;

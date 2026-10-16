@@ -1155,8 +1155,3 @@ begin
          using ((select public.is_approved())) with check ((select public.is_approved()))', t);
   end loop;
 end $$;
-
--- ═════════════════════════ v11: Гадаад системээс ажил оруулах API (POST /api/v1/tasks) ═════════════════════════
--- Хамтрагч компанийн todo гэх мэт системээс ирсэн ажлын id. source ('api:<систем>') + external_ref давхардахгүй.
-alter table public.tasks add column if not exists external_ref text;
-create unique index if not exists tasks_source_external_ref_key on public.tasks (source, external_ref) where external_ref is not null;

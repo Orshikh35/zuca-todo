@@ -1,55 +1,27 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { z } from "zod";
 import { HttpError, adminClient, errorResponse } from "@/lib/server/context";
-import { notifyAssignee } from "@/lib/server/task-notify";
 import { safeEqual } from "@/lib/server/telegram-link";
 import type { Task } from "@/lib/types";
 
 /**
- * Гадаад системээс (хамтрагч компанийн todo гэх мэт) ZUCA Ops-д ажил шууд үүсгэх API.
- * /api/intake-ээс ялгаатай нь AI-гүй — өгсөн талбараар нь яг тэр чигт нь бүртгэнэ.
+ * Гадаад систем (хамтрагч компанийн todo гэх мэт) ZUCA Ops-ийн ажлуудыг татаж авах API — зөвхөн унших.
+ * Ажлыг ZUCA Ops дээр үүсгэнэ; гадаад систем үүгээр тогтмол татаж өөртөө синк хийнэ.
  *
- *   POST /api/v1/tasks
+ *   GET /api/v1/tasks
  *   Authorization: Bearer <TASKS_API_KEY>      (эсвэл X-API-Key: <TASKS_API_KEY>)
- *   Content-Type: application/json
  *
- *   { "title": "Хөх тэнгэр зуслантай гэрээ байгуулах",   ← заавал
- *     "description": "...", "status": "todo", "priority": "high",
- *     "due_date": "2026-10-20", "assignee_email": "bat@zuca.mn",
- *     "zuca_camp_id": 12, "tags": ["гэрээ"],
- *     "source": "acme", "external_id": "ACME-123" }    ← давхардлаас сэргийлнэ
+ * Query (бүгд заавал биш):
+ *   id              — нэг ажил
+ *   status          — todo,in_progress,review,done (таслалаар)
+ *   updated_since   — ISO огноо/цаг: үүнээс хойш үүссэн/өөрчлөгдсөн ажил (синкэд)
+ *   assignee_email  — тухайн ажилтны ажил
+ *   project_id, tag — төсөл, шошгоор
+ *   limit (1–500, анхдагч 100), offset — хуудаслалт; дараагийн хуудас бол хариунд next_offset
  *
- * 201 — шинээр үүссэн · 200 { duplicate: true } — ижил source + external_id өмнө нь ирсэн
- * Хариуцагчид Telegram мэдэгдэл очно ("notify": false бол үгүй).
+ * Эрэмбэ: updated_at өсөхөөр. Устгасан ажил энд харагдахгүй.
  */
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
-const opt = <T extends z.ZodTypeAny>(s: T) => s.nullish();
-
-const Body = z.object({
-  title: z.string().trim().min(1, "title хоосон байна").max(200),
-  description: opt(z.string().max(8000)),
-  status: opt(z.enum(["todo", "in_progress", "review", "done"])),
-  priority: opt(z.enum(["urgent", "high", "medium", "low"])),
-  due_date: opt(z.string().regex(ISO_DATE, "due_date нь YYYY-MM-DD")),
-  planned_month: opt(z.string().regex(MONTH, "planned_month нь YYYY-MM")),
-  /** Хариуцагч: ZUCA Ops-ийн ажилтны id эсвэл имэйл */
-  assignee_id: opt(z.string().uuid()),
-  assignee_email: opt(z.string().email()),
-  /** Зуслан: ZUCA Ops-ийн id, zuca.mn-ийн id эсвэл яг нэр */
-  camp_id: opt(z.string().uuid()),
-  zuca_camp_id: opt(z.number().int().positive()),
-  camp: opt(z.string().max(200)),
-  project_id: opt(z.string().uuid()),
-  tags: opt(z.array(z.string().trim().min(1).max(40)).max(20)),
-  /** Илгээж буй систем (жишээ нь компанийн нэр) — external_id-тэй хамт давхардал шалгана */
-  source: opt(z.string().trim().regex(/^[\w.-]{1,40}$/, "source нь латин үсэг, тоо, - _ . (40 хүртэл)")),
-  external_id: opt(z.string().trim().min(1).max(200)),
-  notify: opt(z.boolean()),
-});
-
-const FIELDS = "id,title,description,status,priority,assignee_id,camp_id,project_id,due_date,planned_month,tags,source,external_ref,created_at";
+const STATUSES = new Set(["todo", "in_progress", "review", "done"]);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function authorize(req: Request) {
   const clean = (v: string | null | undefined) => (v ?? "").trim().replace(/^["']|["']$/g, "");
@@ -62,115 +34,97 @@ function authorize(req: Request) {
   if (!given || !keys.some((k) => safeEqual(given, k))) throw new HttpError(401, "unauthorized");
 }
 
-export async function POST(req: Request) {
+export async function GET(req: Request) {
   try {
     authorize(req);
-    const json = await req.json().catch(() => {
-      throw new HttpError(400, "JSON body буруу байна");
-    });
-    const parsed = Body.safeParse(json);
-    if (!parsed.success) {
-      const issues = parsed.error.issues.map((i) => ({ field: i.path.join("."), message: i.message }));
-      return Response.json({ error: "validation", issues }, { status: 422 });
-    }
-    const b = parsed.data;
+    const q = new URL(req.url).searchParams;
     const sb = adminClient();
-    const warnings: string[] = [];
-    const source = b.source ? `api:${b.source}` : "api";
-    const ref = b.external_id ?? null;
 
-    if (ref) {
-      const existing = await findByRef(sb, source, ref);
-      if (existing) return Response.json({ ok: true, duplicate: true, task: existing, url: taskUrl(req, existing.id) });
+    const id = q.get("id");
+    const limit = Math.min(Math.max(Number(q.get("limit")) || 100, 1), 500);
+    const offset = Math.max(Number(q.get("offset")) || 0, 0);
+
+    let query = sb.from("tasks").select("*").order("updated_at", { ascending: true }).order("id", { ascending: true });
+
+    if (id) {
+      if (!UUID.test(id)) throw new HttpError(400, "id буруу");
+      query = query.eq("id", id);
+    }
+    const status = (q.get("status") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (status.length) {
+      const bad = status.find((s) => !STATUSES.has(s));
+      if (bad) throw new HttpError(400, `status «${bad}» буруу — todo, in_progress, review, done`);
+      query = query.in("status", status);
+    }
+    const since = q.get("updated_since");
+    if (since) {
+      if (Number.isNaN(Date.parse(since))) throw new HttpError(400, "updated_since нь ISO огноо (2026-10-16 эсвэл 2026-10-16T09:00:00Z)");
+      query = query.gte("updated_at", new Date(since).toISOString());
+    }
+    const projectId = q.get("project_id");
+    if (projectId) {
+      if (!UUID.test(projectId)) throw new HttpError(400, "project_id буруу");
+      query = query.eq("project_id", projectId);
+    }
+    const tag = q.get("tag");
+    if (tag) query = query.contains("tags", [tag]);
+    const email = q.get("assignee_email");
+    if (email) {
+      const { data: p } = await sb.from("profiles").select("id").ilike("email", email.trim().replace(/[\\%_]/g, (c) => `\\${c}`)).limit(1).maybeSingle();
+      if (!p) return Response.json({ tasks: [], count: 0, next_offset: null });
+      query = query.eq("assignee_id", p.id);
     }
 
-    const assignee = await resolveAssignee(sb, b.assignee_id, b.assignee_email, warnings);
-    const camp = await resolveCamp(sb, b.camp_id, b.zuca_camp_id, b.camp, warnings);
-    const project = await resolveProject(sb, b.project_id, warnings);
-    const due = b.due_date ?? null;
-
-    const { data, error } = await sb
-      .from("tasks")
-      .insert({
-        title: b.title,
-        description: b.description?.trim() || null,
-        status: b.status ?? "todo",
-        priority: b.priority ?? "medium",
-        assignee_id: assignee,
-        camp_id: camp,
-        project_id: project,
-        due_date: due,
-        planned_month: b.planned_month ?? (due ? due.slice(0, 7) : null),
-        tags: Array.from(new Set(["API", ...(b.source ? [b.source] : []), ...(b.tags ?? [])])),
-        source,
-        external_ref: ref,
-        position: Date.now(),
-      })
-      .select(FIELDS)
-      .single();
-
-    if (error?.code === "23505" && ref) {
-      // Зэрэг ирсэн ижил хүсэлт — нөгөө нь аль хэдийн үүсгэсэн
-      const existing = await findByRef(sb, source, ref);
-      if (existing) return Response.json({ ok: true, duplicate: true, task: existing, url: taskUrl(req, existing.id) });
-    }
-    if (error?.code === "42703") throw new HttpError(500, "Supabase-д schema.sql (v11, tasks.external_ref)-г ажиллуулна уу");
+    // Дараагийн хуудас байгаа эсэхийг мэдэхийн тулд нэгийг илүү авна
+    const { data, error } = await query.range(offset, offset + limit);
     if (error) throw new HttpError(500, error.message);
+    const rows = (data ?? []) as Task[];
+    const page = rows.slice(0, limit);
 
-    const task = data as unknown as Task;
-    if (b.notify !== false) await notifyAssignee(sb, task, { actorName: b.source ?? "Гадаад систем", reason: "created" });
+    if (id && !page.length) throw new HttpError(404, "Ажил олдсонгүй");
 
-    return Response.json({ ok: true, task, url: taskUrl(req, task.id), ...(warnings.length ? { warnings } : {}) }, { status: 201 });
+    // Хариуцагч, зуслан, төслийн нэрийг нэг дор авна
+    const ids = (k: "assignee_id" | "camp_id" | "project_id") => Array.from(new Set(page.map((t) => t[k]).filter((v): v is string => !!v)));
+    const [people, camps, projects] = await Promise.all([
+      ids("assignee_id").length ? sb.from("profiles").select("id, full_name, email").in("id", ids("assignee_id")) : null,
+      ids("camp_id").length ? sb.from("camps").select("id, name, zuca_id").in("id", ids("camp_id")) : null,
+      ids("project_id").length ? sb.from("projects").select("id, name").in("id", ids("project_id")) : null,
+    ]);
+    const byId = <T extends { id: string }>(r: { data: T[] | null } | null) => new Map((r?.data ?? []).map((x) => [x.id, x]));
+    const person = byId(people as { data: { id: string; full_name: string; email: string }[] | null } | null);
+    const camp = byId(camps as { data: { id: string; name: string; zuca_id: number | null }[] | null } | null);
+    const project = byId(projects as { data: { id: string; name: string }[] | null } | null);
+
+    const base = (process.env.APP_URL || new URL(req.url).origin).replace(/\/$/, "");
+    const tasks = page.map((t) => {
+      const a = t.assignee_id ? person.get(t.assignee_id) : undefined;
+      const c = t.camp_id ? camp.get(t.camp_id) : undefined;
+      const p = t.project_id ? project.get(t.project_id) : undefined;
+      return {
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        status: t.status,
+        priority: t.priority,
+        due_date: t.due_date,
+        planned_month: t.planned_month,
+        tags: t.tags,
+        assignee: a ? { id: a.id, name: a.full_name, email: a.email || null } : null,
+        camp: c ? { id: c.id, name: c.name, zuca_id: c.zuca_id } : null,
+        project: p ? { id: p.id, name: p.name } : null,
+        completed_at: t.completed_at,
+        created_at: t.created_at,
+        updated_at: t.updated_at,
+        url: `${base}/tasks?task=${t.id}`,
+      };
+    });
+
+    if (id) return Response.json({ task: tasks[0] });
+    return Response.json({ tasks, count: tasks.length, next_offset: rows.length > limit ? offset + limit : null });
   } catch (e) {
     return errorResponse(e);
   }
-}
-
-async function findByRef(sb: SupabaseClient, source: string, ref: string) {
-  const { data, error } = await sb.from("tasks").select(FIELDS).eq("source", source).eq("external_ref", ref).limit(1).maybeSingle();
-  if (error?.code === "42703") throw new HttpError(500, "Supabase-д schema.sql (v11, tasks.external_ref)-г ажиллуулна уу");
-  if (error) throw new HttpError(500, error.message);
-  return data as unknown as Task | null;
-}
-
-/** Олдохгүй бол ажлыг хариуцагчгүй үүсгээд анхааруулга буцаана (админ хуваарилна) */
-async function resolveAssignee(sb: SupabaseClient, id: string | null | undefined, email: string | null | undefined, warnings: string[]) {
-  if (!id && !email) return null;
-  let q = sb.from("profiles").select("id, active").limit(1);
-  q = id ? q.eq("id", id) : q.ilike("email", email!.replace(/[\\%_]/g, (c) => `\\${c}`));
-  const { data } = await q.maybeSingle();
-  if (!data) {
-    warnings.push(`Хариуцагч «${id ?? email}» олдсонгүй — хариуцагчгүй үүслээ`);
-    return null;
-  }
-  if (!data.active) warnings.push(`Хариуцагч «${id ?? email}» идэвхгүй (ажлаас гарсан) байна`);
-  return data.id as string;
-}
-
-async function resolveCamp(
-  sb: SupabaseClient,
-  id: string | null | undefined,
-  zucaId: number | null | undefined,
-  name: string | null | undefined,
-  warnings: string[],
-) {
-  if (!id && !zucaId && !name) return null;
-  let q = sb.from("camps").select("id").limit(1);
-  if (id) q = q.eq("id", id);
-  else if (zucaId) q = q.eq("zuca_id", zucaId);
-  else q = q.ilike("name", name!.trim().replace(/[\\%_]/g, (c) => `\\${c}`));
-  const { data } = await q.maybeSingle();
-  if (!data) warnings.push(`Зуслан «${id ?? zucaId ?? name}» олдсонгүй — зуслангүй үүслээ`);
-  return (data?.id as string | undefined) ?? null;
-}
-
-async function resolveProject(sb: SupabaseClient, id: string | null | undefined, warnings: string[]) {
-  if (!id) return null;
-  const { data } = await sb.from("projects").select("id").eq("id", id).maybeSingle();
-  if (!data) warnings.push(`Төсөл «${id}» олдсонгүй`);
-  return (data?.id as string | undefined) ?? null;
-}
-
-function taskUrl(req: Request, id: string) {
-  return `${(process.env.APP_URL || new URL(req.url).origin).replace(/\/$/, "")}/tasks?task=${id}`;
 }
