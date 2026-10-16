@@ -24,14 +24,24 @@ const STATUSES = new Set(["todo", "in_progress", "review", "done"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function authorize(req: Request) {
-  const clean = (v: string | null | undefined) => (v ?? "").trim().replace(/^["']|["']$/g, "");
+  // Хуулахад орж ирсэн хоосон зай, хашилт, < > хаалтыг тэвчинэ
+  const clean = (v: string | null | undefined) => (v ?? "").trim().replace(/^["'<]+|["'>]+$/g, "");
   const keys = clean(process.env.TASKS_API_KEY)
     .split(",")
     .map((k) => k.trim())
     .filter(Boolean);
-  const given = clean((req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "")) || clean(req.headers.get("x-api-key"));
+  const given = clean((req.headers.get("authorization") ?? "").replace(/^(Bearer\s+)+/i, "")) || clean(req.headers.get("x-api-key"));
   if (!keys.length) throw new HttpError(503, "TASKS_API_KEY тохируулаагүй байна");
-  if (!given || !keys.some((k) => safeEqual(given, k))) throw new HttpError(401, "unauthorized");
+  // 401-ийн шалтгааныг тодорхой хэлнэ — гадаад хөгжүүлэгч өөрөө засаж чадахаар
+  if (!given) {
+    throw new HttpError(
+      401,
+      "unauthorized: «Authorization: Bearer <түлхүүр>» header ирсэнгүй. https:// ашиглана уу (http:// → https:// шилжихэд header хасагддаг); URL-д түлхүүр тавихгүй.",
+    );
+  }
+  if (!keys.some((k) => safeEqual(given, k))) {
+    throw new HttpError(401, "unauthorized: түлхүүр буруу байна («Bearer» нэг удаа, < > хаалтгүй, хоосон зайгүй).");
+  }
 }
 
 export async function GET(req: Request) {
